@@ -76,14 +76,14 @@ iot-sensor-app/
 
 ## 🚀 Usage
 ### 1. Configure paths
-Edit the variable in `iot_sensor_app_full.py`:
+Edit the variable in `iot_sensor_app.py`:
 ```python
 DATASET_PATH = "/home/ethan/datasets/intel_lab/intel_sensors.csv"
 ```
 
 ### 2. Run the application
 ```bash
-python3 iot_sensor_app_full.py
+python3 iot_sensor_app.py
 ```
 
 On first run:
