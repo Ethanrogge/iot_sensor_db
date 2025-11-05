@@ -1,0 +1,31 @@
+# Python cache and environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+venv/
+.env/
+*.log
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+
+# Databases and datasets (too large for GitHub)
+*.db
+*.zip
+*.gz
+*.tar
+*.tar.gz
+data.txt
+intel_sensors.csv
+datasets/
+intel_lab/
+
+# System and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
