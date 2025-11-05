@@ -66,7 +66,7 @@ date,time,epoch,moteid,temperature,humidity,light,voltage
 ```
 iot-sensor-app/
 │
-├── iot_sensor_app_full.py        # Main application script
+├── iot_sensor_app.py        # Main application script
 ├── intel_sensors.csv             # Cleaned dataset
 ├── iot_sensors_full_duck.db      # DuckDB database (auto-generated)
 ├── iot_sensors_full_bdb.db       # BerkeleyDB database (auto-generated)
@@ -193,7 +193,7 @@ PG_PARAMS = {
 ## 🧪 Running the Benchmark
 
 ```bash
-python3 benchmark_iot_kv.py
+python3 benchmark.py
 ```
 
 Example output snippet:
