@@ -1,0 +1,37 @@
+engine,n_rows,phase,avg_duration_s,note
+duckdb,1000,LOAD,3.385824,
+duckdb,1000,LAST_READINGS,0.007163,(for 1 sensors)
+duckdb,1000,AVG_SENSOR,0.000884,(for 1 sensors)
+duckdb,1000,HOT_SENSORS,0.001251,
+duckdb,1000,ANOMALIES,0.007818,(for 1 sensors)
+postgresql,1000,LOAD,0.019729,
+postgresql,1000,LAST_READINGS,0.000948,(for 1 sensors)
+postgresql,1000,AVG_SENSOR,0.000702,(for 1 sensors)
+postgresql,1000,HOT_SENSORS,0.003055,
+postgresql,1000,ANOMALIES,0.000513,(for 1 sensors)
+berkeleydb,1000,LOAD,0.006808,
+berkeleydb,1000,LAST_READINGS,7.7e-05,(for 1 sensors)
+duckdb,10000,LOAD,31.023517,
+duckdb,10000,LAST_READINGS,0.005924,(for 1 sensors)
+duckdb,10000,AVG_SENSOR,0.000818,(for 1 sensors)
+duckdb,10000,HOT_SENSORS,0.000772,
+duckdb,10000,ANOMALIES,0.00688,(for 1 sensors)
+postgresql,10000,LOAD,0.18434,
+postgresql,10000,LAST_READINGS,0.005941,(for 1 sensors)
+postgresql,10000,AVG_SENSOR,0.001442,(for 1 sensors)
+postgresql,10000,HOT_SENSORS,0.00485,
+postgresql,10000,ANOMALIES,0.007203,(for 1 sensors)
+berkeleydb,10000,LOAD,0.017276,
+berkeleydb,10000,LAST_READINGS,0.000453,(for 1 sensors)
+duckdb,100000,LOAD,333.999112,
+duckdb,100000,LAST_READINGS,0.017498,(for 3 sensors)
+duckdb,100000,AVG_SENSOR,0.007457,(for 3 sensors)
+duckdb,100000,HOT_SENSORS,0.005084,
+duckdb,100000,ANOMALIES,0.018109,(for 3 sensors)
+postgresql,100000,LOAD,1.646969,
+postgresql,100000,LAST_READINGS,0.032986,(for 3 sensors)
+postgresql,100000,AVG_SENSOR,0.025704,(for 3 sensors)
+postgresql,100000,HOT_SENSORS,0.01416,
+postgresql,100000,ANOMALIES,0.059314,(for 3 sensors)
+berkeleydb,100000,LOAD,0.123811,
+berkeleydb,100000,LAST_READINGS,0.005464,(for 3 sensors)
