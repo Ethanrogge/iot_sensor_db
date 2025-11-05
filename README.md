@@ -101,6 +101,129 @@ On first run:
 5. Exit
 ```
 
+## 📊 Benchmark Overview
+
+The file [`benchmark.py`](benchmark.py) performs a **systematic performance comparison** between:
+
+| Database | Type | Description |
+|-----------|------|-------------|
+| **DuckDB** | Embedded, columnar | Fast analytical queries in-process |
+| **BerkeleyDB** | Embedded, key-value | Lightweight, low-latency data store |
+| **PostgreSQL** | Server-based | Full relational baseline |
+
+---
+
+## 🧮 Benchmark Design
+
+Each benchmark iteration measures the performance of four core operations:
+
+| Operation | Description |
+|------------|-------------|
+| **LOAD**   | Insert all rows (initial data loading) |
+| **READ**   | Random reads (SELECT/GET) |
+| **UPDATE** | Modify random rows |
+| **DELETE** | Remove random keys |
+
+For each operation, the script computes:
+- Average duration across 6 runs (1 warmup + 5 measurements)  
+- Throughput in operations per second (`ops/s`)
+
+The dataset is read directly from the **real Intel CSV**, with pairs `(k, v)` built as:
+```
+k = unique integer key
+v = "epoch,moteid,temperature,humidity,light,voltage"
+```
+
+The number of test rows (`N`) is configurable in:
+```python
+N_OBJECTS_LIST = [1_000, 10_000, 100_000, 1_000_000]
+```
+
+---
+
+## 🧠 Sampling Logic
+
+Originally, the dataset was balanced across sensors.  
+To better simulate large-scale testing, the benchmark now **forces exactly N rows**, even if that slightly breaks the per-sensor balance.
+
+The new sampling strategy:
+1. Takes ~equal number of rows per sensor (chronologically sorted)
+2. Fills the remaining quota in a round-robin fashion until reaching exactly `max_n`
+
+Example console output:
+
+```
+Capteurs détectés : 55 | lignes totales : 2,219,802
+max_n effectif = 100000
+On vise ~1818 lignes par capteur (1ère passe).
+Après 1ère passe : 98,982 lignes, on complète avec 1,018 supplémentaires pour atteindre max_n.
+100,000 values sélectionnées au total.
+```
+
+---
+
+## ⚙️ Database Setup
+
+### PostgreSQL Configuration
+Create the database and user before running the benchmark:
+
+```bash
+sudo -u postgres psql
+CREATE DATABASE sensors;
+CREATE USER ethan WITH PASSWORD 'password';
+GRANT ALL PRIVILEGES ON DATABASE sensors TO ethan;
+GRANT CREATE ON SCHEMA public TO ethan;
+ALTER SCHEMA public OWNER TO ethan;
+\q
+```
+
+Edit connection parameters if needed in the benchmark script:
+```python
+PG_PARAMS = {
+    "dbname": "sensors",
+    "user": "ethan",
+    "password": "password",
+    "host": "localhost",
+    "port": 5432
+}
+```
+
+---
+
+## 🧪 Running the Benchmark
+
+```bash
+python3 benchmark_iot_kv.py
+```
+
+Example output snippet:
+
+```
+===== N = 10000 objets (paires k/v issues du dataset réel) =====
+
+[duckdb     ] N=10000 LOAD   | ops=10000 | avg=0.4215s | thr=23725.88 ops/s
+[duckdb     ] N=10000 READ   | ops=10000 | avg=0.0574s | thr=174241.55 ops/s
+[berkeleydb ] N=10000 LOAD   | ops=10000 | avg=0.2914s | thr=34299.41 ops/s
+[postgresql ] N=10000 LOAD   | ops=10000 | avg=1.2253s | thr=8162.42 ops/s
+...
+Résultats enregistrés dans kv_iot_results.csv
+```
+
+---
+
+## 📈 Result Storage
+
+All measurements are exported to `kv_iot_results.csv` with the following columns:
+
+| Column | Description |
+|---------|-------------|
+| `engine` | duckdb / berkeleydb / postgresql |
+| `n_objects` | number of key/value pairs tested |
+| `phase` | LOAD / READ / UPDATE / DELETE |
+| `operations` | total operations performed |
+| `avg_duration_s` | mean duration (seconds) |
+| `throughput_ops_s` | throughput (operations per second) |
+
 Example session:
 ```
 Select option: 2
