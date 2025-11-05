@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 IoT Sensor Mini-App (version full columns) using BerkeleyDB + DuckDB.
 
