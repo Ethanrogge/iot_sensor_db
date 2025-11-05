@@ -13,9 +13,9 @@ from collections import defaultdict
 import duckdb
 from bsddb3 import db as bdb
 
-# -------------------- CONFIG --------------------
+#CONFIG
 
-DATASET_PATH = "/home/ethan/datasets/intel_sensors.csv"  # adapte si besoin
+DATASET_PATH = "/home/ethan/datasets/intel_sensors.csv"  
 
 BDB_FILE = "iot_sensors_full_bdb.db"
 DUCKDB_FILE = "iot_sensors_full_duck.db"
@@ -24,17 +24,12 @@ MAX_ROWS = 10_044     # max de lignes à charger (peut être None pour tout)
 MAX_PER_SENSOR = 10_000   # dernières mesures par capteur en BDB
 
 
-# -------------------- CHARGEMENT DU CSV COMPLET --------------------
+#CHARGEMENT DU CSV COMPLET
 
 def load_sensor_dataset(limit=MAX_ROWS):
     """
     Charge le dataset complet et sélectionne un nombre équilibré de lignes
     par capteur (~ limit / nb de capteurs), conservant l'ordre chronologique.
-
-    Colonnes attendues :
-      date,time,epoch,moteid,temperature,humidity,light,voltage
-    Retour :
-      [(date, time, epoch, moteid, temperature, humidity, light, voltage), ...]
     """
     import csv
     from collections import defaultdict
@@ -43,7 +38,7 @@ def load_sensor_dataset(limit=MAX_ROWS):
     print(f"Loading sensor dataset from {DATASET_PATH} ...")
     data_per_sensor = defaultdict(list)
 
-    # 1) Lire toutes les lignes et regrouper par capteur
+    # Lire toutes les lignes et regrouper par capteur
     with open(DATASET_PATH, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -64,35 +59,34 @@ def load_sensor_dataset(limit=MAX_ROWS):
     total_rows = sum(len(v) for v in data_per_sensor.values())
     print(f"Detected {total_sensors} sensors with {total_rows:,} total rows.")
 
-    # 2) Trier chaque capteur par timestamp
+    # Trier chaque capteur par timestamp
     for mote in data_per_sensor:
-        data_per_sensor[mote].sort(key=lambda x: x[2])  # x[2] = epoch
+        data_per_sensor[mote].sort(key=lambda x: x[2])  
 
-    # 3) Déterminer combien de lignes par capteur
+    # Déterminer combien de lignes par capteur
     if limit is None or limit > total_rows:
         limit = total_rows
     per_sensor_limit = max(1, limit // total_sensors)
     print(f"Selecting ~{per_sensor_limit} chronological rows per sensor.")
 
-    # 4) Prendre un sous-ensemble équitable par capteur, en respectant l'ordre
+    # Prendre un sous-ensemble équitable par capteur, en respectant l'ordre
     balanced_rows = []
     for mote, readings in data_per_sensor.items():
         if len(readings) > per_sensor_limit:
-            # Choisir une fenêtre continue aléatoire dans la série temporelle
             start_index = random.randint(0, len(readings) - per_sensor_limit)
             subset = readings[start_index : start_index + per_sensor_limit]
             balanced_rows.extend(subset)
         else:
             balanced_rows.extend(readings)
 
-    # 5) Mélanger globalement pour ne pas avoir tout un capteur d’un bloc
+    # Mélanger globalement pour ne pas avoir tout un capteur d’un bloc
     random.shuffle(balanced_rows)
 
     print(f"Loaded {len(balanced_rows):,} balanced chronological rows from all sensors.")
     return balanced_rows
 
 
-# -------------------- BERKELEYDB : stockage recent par capteur --------------------
+# BERKELEYDB : stockage recent par capteur 
 
 def build_berkeleydb(data):
     """
@@ -167,7 +161,7 @@ def show_last_readings_bdb(mote_id, limit=10):
               f"temp={temp:.2f}°C | hum={hum:.2f}% | light={light:.0f} | volt={volt:.2f}V")
 
 
-# -------------------- DUCKDB : base analytique complète --------------------
+# DUCKDB : base analytique complète
 
 def build_duckdb(data):
     """
@@ -235,7 +229,7 @@ def sensors_with_high_avg_temp(threshold=30.0, min_readings=100):
         print(f"  Sensor {moteid:<5} | avg={avg_temp:.2f}°C | readings={n}")
 
 
-# -------------------- HYBRIDE : anomalies --------------------
+#HYBRIDE : anomalies 
 
 def detect_anomalies_for_sensor(mote_id, z_threshold=2.5):
     """
@@ -276,7 +270,7 @@ def detect_anomalies_for_sensor(mote_id, z_threshold=2.5):
         print(f"  {date} {time_} | epoch={epoch} | temp={temp:.2f}°C | z={z:.2f}")
 
 
-# -------------------- MAIN MENU --------------------
+# MAIN 
 
 def main():
     # s'il n'y a pas encore nos DB, on les (re)construit à partir du CSV complet
