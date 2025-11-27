@@ -1,132 +1,163 @@
 #!/usr/bin/env python3
 """
-Visualization of the application-level IoT benchmark results.
+plotv3.py — Plot benchmark results including
+Solution 2: FULL_PROFILE_SQL for DuckDB & PostgreSQL,
+and FULL_PROFILE (local stats) for BerkeleyDB.
 
-Reads app_benchmark_results.csv and generates:
- - one plot per phase (LOAD, LAST_READINGS, AVG_SENSOR, HOT_SENSORS, ANOMALIES)
- - comparison of average durations between DuckDB, PostgreSQL and BerkeleyDB
- - optional combined overview chart
-
-Outputs PNG files in ./plots_app/
+Generates:
+  - One graph per phase
+  - Combined graph FULL_PROFILE comparing DuckDB, PostgreSQL, BDB
 """
 
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-RESULTS_CSV = "app_benchmark_results.csv"
-OUTPUT_DIR = "plots_app"
+INPUT_CSV = "app_benchmark_results.csv"
+OUTPUT_DIR = "plots_v3"
 
+PHASES_SQL = [
+    "AVG_SENSOR",
+    "DAILY_SUMMARY",
+    "OUTAGES",
+    "TOPK_SENSORS",
+]
 
 def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
 
-def plot_phase(df, phase):
+def load_data():
+    df = pd.read_csv(INPUT_CSV)
+    return df
+
+
+def plot_phase(df, phase, ylabel="Time (s)"):
     """
-    Plot average duration (s) vs number of rows (N)
-    for a specific phase, with one curve per engine.
+    Plot execution time per engine for a given phase.
     """
-    phase_df = df[df["phase"] == phase].copy()
-    if phase_df.empty:
-        print(f"[WARN] No data for phase {phase}")
+    sub = df[df["phase"] == phase]
+    if sub.empty:
         return
 
-    plt.figure(figsize=(8, 5))
-    for engine in sorted(phase_df["engine"].unique()):
-        sub = phase_df[phase_df["engine"] == engine].sort_values("n_rows")
+    plt.figure(figsize=(10, 6))
+    for engine in sub["engine"].unique():
+        d = sub[sub["engine"] == engine]
         plt.plot(
-            sub["n_rows"],
-            sub["avg_duration_s"],
+            d["n_rows"],
+            d["avg_duration_s"],
             marker="o",
-            linestyle="-",
             label=engine,
         )
 
-    plt.xlabel("Number of rows (N)")
-    plt.ylabel("Average duration (s)")
-    plt.title(f"{phase} – Application-Level Performance")
+    plt.title(f"{phase} — performance comparison")
+    plt.xlabel("N rows")
+    plt.ylabel(ylabel)
+    plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend()
-    plt.grid(True)
-    plt.xscale("log")
-    plt.yscale("log")
-    filename = os.path.join(OUTPUT_DIR, f"{phase.lower()}_duration.png")
-    plt.savefig(filename, bbox_inches="tight")
+
+    fname = os.path.join(OUTPUT_DIR, f"{phase.lower()}.png")
+    plt.savefig(fname, bbox_inches="tight")
     plt.close()
-    print(f"[OK] Saved {filename}")
+    print(f"[OK] Saved {fname}")
 
 
-def plot_overview(df):
+def compute_full_profile_sql(df):
     """
-    Combined overview comparing engines on all phases
-    (bar chart version, safe alignment across engines)
+    For DuckDB & PostgreSQL:
+      FULL_PROFILE_SQL = sum of phase timings:
+          AVG_SENSOR + DAILY_SUMMARY + OUTAGES + TOPK_SENSORS
+
+    For BerkeleyDB:
+      FULL_PROFILE = existing FULL_PROFILE time (local stats)
+
+    Returns a new dataframe with:
+      engine, n_rows, phase='FULL_PROFILE', avg_duration_s
     """
-    summary = (
-        df.groupby(["engine", "phase"])["avg_duration_s"]
-        .mean()
-        .reset_index()
-    )
+    engines = ["duckdb", "postgresql"]
 
-    phases = sorted(df["phase"].unique())
-    engines = sorted(df["engine"].unique())
+    rows = []
 
-    # Largeur totale d’un groupe de barres
-    bar_width = 0.25
-    positions = range(len(phases))
+    # 1. Compute FULL_PROFILE_SQL for DuckDB + PostgreSQL
+    for engine in engines:
+        df_eng = df[df["engine"] == engine]
 
+        for n in df_eng["n_rows"].unique():
+            total = 0
+            valid = True
+            for p in PHASES_SQL:
+                v = df_eng[(df_eng["n_rows"] == n) & (df_eng["phase"] == p)]
+                if len(v) == 0:
+                    valid = False
+                    break
+                total += float(v["avg_duration_s"].values[0])
+
+            if valid:
+                rows.append({
+                    "engine": engine,
+                    "n_rows": n,
+                    "phase": "FULL_PROFILE",
+                    "avg_duration_s": total,
+                })
+
+    # 2. Add BDB FULL_PROFILE (already measured)
+    df_bdb = df[(df["engine"] == "berkeleydb") & (df["phase"] == "FULL_PROFILE")]
+    for _, r in df_bdb.iterrows():
+        rows.append({
+            "engine": "berkeleydb",
+            "n_rows": r["n_rows"],
+            "phase": "FULL_PROFILE",
+            "avg_duration_s": r["avg_duration_s"],
+        })
+
+    out = pd.DataFrame(rows)
+    return out
+
+
+def plot_full_profile(df):
+    """
+    Plot FULL_PROFILE: DuckDB, PostgreSQL, BerkeleyDB together.
+    """
     plt.figure(figsize=(10, 6))
 
-    for i, engine in enumerate(engines):
-        engine_data = summary[summary["engine"] == engine]
-        # map les phases pour avoir 0 si absentes
-        heights = []
-        for phase in phases:
-            val = engine_data.loc[engine_data["phase"] == phase, "avg_duration_s"]
-            heights.append(val.iloc[0] if not val.empty else 0.0)
+    for engine in df["engine"].unique():
+        d = df[df["engine"] == engine]
+        plt.plot(
+            d["n_rows"],
+            d["avg_duration_s"],
+            marker="o",
+            label=engine,
+        )
 
-        offsets = [p + i * bar_width for p in positions]
-        plt.bar(offsets, heights, width=bar_width, label=engine)
-
-    plt.xticks(
-        [p + bar_width for p in positions],
-        phases,
-        rotation=30,
-    )
-    plt.ylabel("Average Duration (s)")
-    plt.title("Overall Comparison – Application-Level Phases")
+    plt.title("FULL_PROFILE — Combined profile workload")
+    plt.xlabel("N rows")
+    plt.ylabel("Time (s)")
+    plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend()
-    plt.grid(axis="y", linestyle="--", alpha=0.5)
 
-    filename = os.path.join(OUTPUT_DIR, "overview_comparison.png")
-    plt.savefig(filename, bbox_inches="tight")
+    fname = os.path.join(OUTPUT_DIR, "full_profile.png")
+    plt.savefig(fname, bbox_inches="tight")
     plt.close()
-    print(f"[OK] Saved {filename}")
-
+    print(f"[OK] Saved {fname}")
 
 
 def main():
-    if not os.path.exists(RESULTS_CSV):
-        print(f"[ERROR] {RESULTS_CSV} not found.")
-        return
-
     ensure_dir(OUTPUT_DIR)
-    df = pd.read_csv(RESULTS_CSV)
+    df = load_data()
 
-    required = {"engine", "n_rows", "phase", "avg_duration_s"}
-    if not required.issubset(df.columns):
-        print(f"[ERROR] CSV missing expected columns: {required}")
-        print("Columns found:", df.columns.tolist())
-        return
+    # Plot all individual SQL phases + BDB phases
+    phases = df["phase"].unique()
+    for p in phases:
+        plot_phase(df, p)
 
-    phases = sorted(df["phase"].unique())
-    print(f"Phases detected: {phases}")
+    # Compute combined FULL_PROFILE
+    df_full = compute_full_profile_sql(df)
 
-    for phase in phases:
-        plot_phase(df, phase)
+    # Plot FULL_PROFILE combining all engines
+    plot_full_profile(df_full)
 
-    plot_overview(df)
-    print(f"\n✅ All plots saved in '{OUTPUT_DIR}/'.")
+    print("\nAll plots generated in ./plots_v3/")
 
 
 if __name__ == "__main__":
