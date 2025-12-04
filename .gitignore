@@ -29,3 +29,22 @@ intel_lab/
 Thumbs.db
 .vscode/
 .idea/
+
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.blg
+*.log
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.acn
+*.bcf
+*.run.xml
+*.synctex.gz
+*.out
+*.bbl-SAVE-ERROR
+*.glo
+*.ist

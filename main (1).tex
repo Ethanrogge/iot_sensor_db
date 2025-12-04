@@ -1,22 +1,64 @@
-\documentclass[12pt]{article}   % Texte plus lisible
+% \documentclass[12pt]{article}   % Texte plus lisible
+\documentclass{ULBreport}
+% \usepackage[a4paper,margin=2cm]{geometry}  % Marges réduites
+% \usepackage{graphicx} % Required for inserting images
+% \usepackage{caption}       % Better control over captions
+% \usepackage{subcaption}    % If you want subfigures (optional)
+% \usepackage{amsmath}       % Math formulas
+% \usepackage{amssymb}       % Math symbols
+% \usepackage{booktabs}      % For nicer tables (optional)
+% \usepackage{hyperref}      % For clickable references
+% \usepackage{float}         % For forcing figure placement (H)
+% \usepackage{xcolor}        % Colors if needed
 
-\usepackage[a4paper,margin=2cm]{geometry}  % Marges réduites
-\usepackage{graphicx} % Required for inserting images
-\usepackage{caption}       % Better control over captions
-\usepackage{subcaption}    % If you want subfigures (optional)
-\usepackage{amsmath}       % Math formulas
-\usepackage{amssymb}       % Math symbols
-\usepackage{booktabs}      % For nicer tables (optional)
-\usepackage{hyperref}      % For clickable references
-\usepackage{float}         % For forcing figure placement (H)
-\usepackage{xcolor}        % Colors if needed
+\usepackage[toc,acronyms]{glossaries}
 
-\title{Benchmarking Embedded Databases on IoT Sensor Data}
-\author{Ethan Rogge, ...}
-\date{December 2025}
+\usepackage{float}
+
+\usepackage{eurosym}
+
+\usepackage{listings}
+
+\usepackage{tikz}
+\usepackage{forest}
+
+\usepackage{multirow}
+
+\usepackage{lscape}
+
+\usepackage{graphicx}
+\usepackage{subfig}
+
+\usepackage[
+backend=biber,
+sorting=ynt
+]{biblatex}
+\addbibresource{references.bib}
+
+\sceau{pictures/sceauULB.jpg}
+
+\makeglossaries
 
 \begin{document}
-\maketitle
+
+
+    \titleULB{
+    	title={Benchmarking Embedded Databases on IoT Sensor Data},
+    	course={INFO-H-415: Advanced Databases},
+    	author={
+                ETHAN Rogge () -- \textcolor{blue}{\texttt{ethan.rogge@ulb.be}}\\
+                DONNAY Basile (619065) -- \textcolor{blue}{\texttt{basile.donnay@ulb.be}}\\
+                ANAS Cheroufia () -- \textcolor{blue}{\texttt{cheroufia.anas@ulb.be}}
+            },
+    	date={Academic Year 2025-2026},
+    	teacher={M. Esteban Zimányi (ezimanyi@ulb.ac.be)},
+    	logo={pictures/logo-ulb.png}
+    }
+
+    \printglossary
+
+    \printglossary[type=\acronymtype]
+
 
 \section{Introduction to the Technology: Embedded Databases}
 \label{sec:technology}
@@ -631,7 +673,7 @@ efficiency of a key--value style engine for append-heavy workloads.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/load.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/load.png}
   \caption{LOAD --- average duration vs.~number of rows.}
   \label{fig:load}
 \end{figure}
@@ -647,7 +689,7 @@ relying on index-based lookups.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/read_duration.png}
+  \includegraphics[width=0.4\linewidth]{plots/read_duration.png}
   \caption{READ --- average duration vs.~number of rows.}
   \label{fig:read}
 \end{figure}
@@ -662,14 +704,14 @@ induced by its append-only columnar storage.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/update_duration.png}
+  \includegraphics[width=0.4\linewidth]{plots/update_duration.png}
   \caption{UPDATE --- average duration vs.~number of rows.}
   \label{fig:update}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/delete_duration.png}
+  \includegraphics[width=0.4\linewidth]{plots/delete_duration.png}
   \caption{DELETE --- average duration vs.~number of rows.}
   \label{fig:delete}
 \end{figure}
@@ -683,7 +725,7 @@ moderately well ($\approx 21$\,ms at $10^5$), while PostgreSQL is the slowest
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/last_readings.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/last_readings.png}
   \caption{LAST\_READINGS --- average duration vs.~number of rows.}
   \label{fig:lastreadings}
 \end{figure}
@@ -699,7 +741,7 @@ columnar execution. BerkeleyDB cannot execute this query directly.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/anomalies.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/anomalies.png}
   \caption{ANOMALIES --- performance comparison between DuckDB and PostgreSQL.}
   \label{fig:anomalies}
 \end{figure}
@@ -712,7 +754,7 @@ achieving about 0.01\,s at $10^5$ rows, versus 0.027\,s for PostgreSQL.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/avg_sensor.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/avg_sensor.png}
   \caption{AVG\_SENSOR --- performance comparison.}
   \label{fig:avgsensor}
 \end{figure}
@@ -725,7 +767,7 @@ PostgreSQL.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/hot_sensors.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/hot_sensors.png}
   \caption{HOT\_SENSORS --- performance comparison.}
   \label{fig:hotsensors}
 \end{figure}
@@ -738,7 +780,7 @@ function on timestamps. Figure~\ref{fig:outages} shows that DuckDB scales from r
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/outages.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/outages.png}
   \caption{OUTAGES --- performance comparison.}
   \label{fig:outages}
 \end{figure}
@@ -751,7 +793,7 @@ $N$.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/topk_sensors.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/topk_sensors.png}
   \caption{TOPK\_SENSORS --- performance comparison.}
   \label{fig:topk}
 \end{figure}
@@ -765,7 +807,7 @@ Figure~\ref{fig:comparetwo} shows that DuckDB remains fast
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/compare_two.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/compare_two.png}
   \caption{COMPARE\_TWO --- performance comparison.}
   \label{fig:comparetwo}
 \end{figure}
@@ -778,7 +820,7 @@ differences in how both engines materialise intermediate grouped results.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/daily_summary.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/daily_summary.png}
   \caption{DAILY\_SUMMARY --- performance comparison.}
   \label{fig:dailysummary}
 \end{figure}
@@ -794,7 +836,7 @@ for its limited local task (0.004\,s to 0.030\,s).
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.4\linewidth]{fig/full_profile.png}
+  \includegraphics[width=0.4\linewidth]{plots_app/full_profile.png}
   \caption{FULL\_PROFILE --- combined profile workload.}
   \label{fig:fullprofile}
 \end{figure}
@@ -878,6 +920,10 @@ Instead, each engine is optimal for a different role in sensor data processing:
 The benchmark confirms that embedded key--value technology is extremely well
 suited for local, latency-critical access, but must be complemented by an
 analytical engine to support the full range of sensor analytics workloads.
+
+\newpage
+\nocite{*}
+\printbibliography
 
 \end{document}
 
