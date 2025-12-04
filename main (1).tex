@@ -1,0 +1,883 @@
+\documentclass[12pt]{article}   % Texte plus lisible
+
+\usepackage[a4paper,margin=2cm]{geometry}  % Marges réduites
+\usepackage{graphicx} % Required for inserting images
+\usepackage{caption}       % Better control over captions
+\usepackage{subcaption}    % If you want subfigures (optional)
+\usepackage{amsmath}       % Math formulas
+\usepackage{amssymb}       % Math symbols
+\usepackage{booktabs}      % For nicer tables (optional)
+\usepackage{hyperref}      % For clickable references
+\usepackage{float}         % For forcing figure placement (H)
+\usepackage{xcolor}        % Colors if needed
+
+\title{Benchmarking Embedded Databases on IoT Sensor Data}
+\author{Ethan Rogge, ...}
+\date{December 2025}
+
+\begin{document}
+\maketitle
+
+\section{Introduction to the Technology: Embedded Databases}
+\label{sec:technology}
+
+Embedded databases constitute a class of data management systems designed to
+run \emph{inside} a host program rather than as an external server process.
+The DBMS executes within the same address space as the host application and is
+invoked via direct API calls instead of network protocols. This architectural
+choice profoundly shapes both the capabilities and limitations of embedded
+database systems.
+
+\subsection{Definition of Embedded Databases}
+
+An embedded database is a DBMS that:
+\begin{itemize}
+    \item operates as a software library linked to an application or process,
+    \item does not require a separate server or daemon,
+    \item stores data locally on the device's filesystem or in memory,
+    \item handles queries or operations through a direct programming interface.
+\end{itemize}
+
+This contrasts with traditional server-based DBMS---such as PostgreSQL or
+MySQL---where applications connect via network protocols to an external 
+process that manages concurrency, storage, and query execution.
+
+Embedded databases offer several key advantages:
+\begin{itemize}
+    \item \textbf{Low latency:} no network round-trip is required.
+    \item \textbf{Minimal overhead:} no inter-process communication.
+    \item \textbf{Portability:} the database engine is distributed with the binary.
+    \item \textbf{Small footprint:} suitable for embedded devices, IoT nodes, or mobile apps.
+    \item \textbf{Tight control:} the host program can directly manage caching and storage.
+\end{itemize}
+
+However, these systems also come with inherent limitations:
+\begin{itemize}
+    \item reduced concurrency and multi-user capabilities,
+    \item limited or absent SQL support in many engines,
+    \item no access control or advanced security features,
+    \item responsibility for durability and schema evolution often shifted to the host program.
+\end{itemize}
+
+These trade-offs make embedded databases particularly suitable for
+resource-constrained environments such as IoT nodes, sensors, robotics, or
+standalone desktop analytics workflows.
+
+\subsection{Architectural Models of Embedded Databases}
+
+Embedded database technologies vary significantly in their internal design.
+Several architectural models are commonly used:
+
+\subsubsection{Page-oriented storage engines}
+
+These systems manage their own page cache, buffer pools, and on-disk B-tree
+structures. Examples include BerkeleyDB, SQLite, and LMDB. Their properties:
+\begin{itemize}
+    \item efficient key-based lookups,
+    \item transactional semantics,
+    \item predictable read/write performance,
+    \item mature caching and recovery mechanisms.
+\end{itemize}
+
+\subsubsection{Log-structured merge trees (LSM)}
+
+Engines such as LevelDB or RocksDB use LSM trees to support:
+\begin{itemize}
+    \item extremely fast writes through append-only logs,
+    \item background compaction processes,
+    \item excellent performance for streaming or time-series ingestion.
+\end{itemize}
+
+These engines are widely used in mobile apps, IoT gateways, and distributed
+storage systems requiring sustained write throughput.
+
+\subsubsection{In-process analytical engines}
+
+Modern embedded engines such as DuckDB embed a complete analytical SQL 
+engine directly inside the host process. Their distinguishing features include:
+\begin{itemize}
+    \item columnar storage,
+    \item vectorised execution and query pipelining,
+    \item efficient analytical queries (aggregations, joins, window functions),
+    \item no need for a separate database server.
+\end{itemize}
+
+Such systems illustrate the evolution of embedded technology: beyond simple
+key--value stores, they support full SQL analytics locally within the
+process.
+
+\subsection{Query Capabilities in Embedded Systems}
+
+Because embedded engines target environments with constrained resources or
+specific workloads, their query capabilities vary widely.
+
+\paragraph{Record-oriented APIs.}
+Many engines expose operations such as:
+\[
+\texttt{get(key)},\quad \texttt{put(key,value)},\quad \texttt{delete(key)}.
+\]
+These APIs offer very fast local access and are ideal for caching or
+metadata storage.
+
+\paragraph{Full SQL support.}
+Some embedded DBMS such as SQLite or DuckDB support full SQL semantics.
+This enables local execution of analytical queries, joins, and aggregations
+without a remote server. Such systems are attractive for standalone desktop
+analytics and local data processing pipelines.
+
+\paragraph{Hybrid approaches.}
+In practice, systems often combine:
+\begin{itemize}
+    \item a lightweight key--value store for fast caching or ingestion,
+    \item a more expressive embedded or external engine for analytical queries.
+\end{itemize}
+
+Our benchmark design reflects this hybrid view by including both a key--value
+embedded store and an embedded analytical engine, together with a traditional
+relational baseline.
+
+\subsection{Embedded Databases in IoT and Edge Computing}
+
+IoT devices frequently require real-time data processing close to where data
+is generated. Embedded databases are central to these architectures because
+they allow devices or gateways to:
+\begin{itemize}
+    \item store recent sensor readings locally,
+    \item perform preliminary filtering or anomaly detection,
+    \item operate autonomously during network outages,
+    \item reduce bandwidth by transmitting only summarised data,
+    \item respect privacy constraints by keeping raw data on device.
+\end{itemize}
+
+Edge computing architectures often include:
+\begin{itemize}
+    \item microcontrollers or single-board computers running a lightweight embedded store,
+    \item intermediate nodes performing local analytics,
+    \item cloud or server components performing long-term storage or heavy computations.
+\end{itemize}
+
+Thus, embedded databases form the backbone of many modern distributed sensing
+and monitoring systems and provide a natural target for benchmarking in the
+context of IoT sensor workloads.
+
+\subsection{Relevance to Our Benchmark Scenario}
+
+The Intel Lab sensor dataset used in our study represents a typical
+IoT scenario involving time-series measurements collected by multiple devices.
+From this scenario, we derive a family of benchmark queries that require:
+\begin{itemize}
+    \item fast access to recent readings,
+    \item statistical computations per sensor,
+    \item detection of anomalies or outages,
+    \item global analytics over large volumes of historical data.
+\end{itemize}
+
+Our goal is not to build a full application but to design a benchmark workload
+that captures these requirements realistically and to evaluate how different
+embedded and non-embedded DBMS behave under this workload.
+
+% ---------------------------------------------------------------------------
+
+\section{Introduction to the Tools}
+\label{sec:tools}
+
+We now present the three database management systems evaluated in the
+benchmark: \textbf{BerkeleyDB}, \textbf{DuckDB}, and \textbf{PostgreSQL}.
+BerkeleyDB and DuckDB are embedded systems, illustrating two different
+implementations of embedded technology, while PostgreSQL serves as a
+traditional server-based relational baseline.
+
+Each subsection explains the internal architecture of the tool, its execution
+model, and its strengths and limitations with respect to sensor data workloads.
+
+\subsection{BerkeleyDB}
+\label{sec:berkeleydb}
+
+BerkeleyDB (BDB) is a mature, high-performance embedded storage engine that
+provides key--value access through a simple API. It operates as a library linked
+directly into the host process, without any external server. As one of
+the earliest and most widely deployed embedded databases, it has been used in
+operating systems, networking equipment, web browsers, and mobile devices.
+
+\subsubsection{Architecture}
+\label{sec:berkeleydb-architecture}
+
+BerkeleyDB is built around a \textbf{page-oriented storage engine} and uses
+B-trees as its primary on-disk structure. Data pages are cached in an internal
+buffer pool, and the engine manages its own journaling, logging, and recovery
+mechanisms. It exposes a simple interface:
+\[
+\texttt{put(key, value)}, \quad \texttt{get(key)}, \quad \texttt{delete(key)},
+\]
+with optional transactional semantics.
+
+Since the DBMS runs within the same process as the client code, all operations
+bypass the overhead of inter-process communication. This leads to extremely low
+latency for key lookups and updates.
+
+\subsubsection{Core Features}
+\label{sec:berkeleydb-features}
+
+The main features of BerkeleyDB include:
+\begin{itemize}
+    \item \textbf{High performance} for point reads, inserts and updates.
+    \item \textbf{Configurable storage models}, including B-tree, hash tables, and queues.
+    \item \textbf{Transaction support} with ACID guarantees.
+    \item \textbf{Crash recovery} through write-ahead logging.
+    \item \textbf{Small footprint}, making it suitable for embedded systems and IoT devices.
+\end{itemize}
+
+\subsubsection{Transaction Model and Concurrency}
+\label{sec:berkeleydb-transactions}
+
+BerkeleyDB supports multiversion concurrency control (MVCC) and fine-grained
+locking. However, concurrency is generally limited to threads within the same
+process. Unlike server-based DBMS, BerkeleyDB does not natively serve multiple
+external clients simultaneously.
+
+\subsubsection{Limitations}
+\label{sec:berkeleydb-limitations}
+
+Despite its performance advantages, BerkeleyDB lacks:
+\begin{itemize}
+    \item SQL query capabilities,
+    \item built-in analytical operators (aggregations, joins, windows),
+    \item multi-user concurrency architecture,
+    \item ad-hoc querying capabilities.
+\end{itemize}
+
+Any form of analytics must be implemented manually in the client code. For
+this reason, BerkeleyDB is best viewed as a \textbf{local cache or storage
+component} rather than a general-purpose analytical DBMS.
+
+\subsubsection{Relevance to Sensor Workloads}
+\label{sec:berkeleydb-relevance}
+
+For sensor data, BerkeleyDB is particularly well suited to:
+\begin{itemize}
+    \item storing recent readings keyed by sensor identifier and time,
+    \item retrieving the latest values for a given sensor,
+    \item updating or deleting individual measurements,
+    \item maintaining small on-device caches.
+\end{itemize}
+
+Our benchmark uses BerkeleyDB to evaluate how such key--value engines perform
+on ingestion and point-access phases derived from sensor workloads.
+
+% ---------------------------------------------------------------------------
+
+\subsection{DuckDB}
+\label{sec:duckdb}
+
+DuckDB is a modern embedded database designed specifically for analytical
+workloads. It provides a full SQL interface and implements many of the
+optimisations found in columnar analytical systems, but packaged as a
+lightweight in-process library.
+
+\subsubsection{Architecture}
+\label{sec:duckdb-architecture}
+
+DuckDB follows a \textbf{columnar storage model} and uses vectorised execution.
+Instead of processing one row at a time, DuckDB processes data in fixed-size
+vectors (e.g., 1024 rows), greatly improving CPU efficiency and cache locality.
+It employs late materialisation, compressed storage, and pipelined execution
+to optimise analytical queries.
+
+The engine runs entirely within the host process, eliminating the need for a
+database server and reducing overhead for local analytical tasks.
+
+\subsubsection{Vectorized Execution Model}
+\label{sec:duckdb-vectorized}
+
+Vectorised execution allows DuckDB to:
+\begin{itemize}
+    \item evaluate expressions over batches of rows,
+    \item exploit SIMD instructions,
+    \item reduce interpretation overhead,
+    \item pipeline operations efficiently.
+\end{itemize}
+
+This model is particularly advantageous for scans, aggregations, joins, and
+window functions, making DuckDB well suited for analytical workloads on
+sensor time-series.
+
+\subsubsection{Columnar Storage and Query Processing}
+\label{sec:duckdb-columnar}
+
+DuckDB stores tables in columnar format, meaning that values of the same column
+are stored contiguously. This enables:
+\begin{itemize}
+    \item faster sequential scans for analytical queries,
+    \item data compression,
+    \item better I/O efficiency,
+    \item reduced memory footprint.
+\end{itemize}
+
+Unlike server DBMS such as PostgreSQL, DuckDB does not maintain row-oriented
+storage optimised for transactional workloads. This explains its poor
+performance on UPDATE, DELETE, and frequent point-lookups.
+
+\subsubsection{Strengths and Limitations}
+\label{sec:duckdb-limitations}
+
+\paragraph{Strengths.}
+\begin{itemize}
+    \item State-of-the-art analytical performance.
+    \item Fully embedded, no server required.
+    \item Full SQL support including window functions.
+    \item Highly portable and easy to integrate into analysis pipelines.
+\end{itemize}
+
+\paragraph{Limitations.}
+\begin{itemize}
+    \item Very slow for write-heavy workloads (UPDATE, DELETE).
+    \item Poor performance for random point-lookups.
+    \item Not a multi-user or concurrent transactional system.
+\end{itemize}
+
+\subsubsection{Role in the Benchmark}
+\label{sec:duckdb-relevance}
+
+In our benchmark, DuckDB is used as an embedded analytical engine executing
+aggregation, anomaly detection, outage detection and correlation queries
+directly on sensor data.
+
+% ---------------------------------------------------------------------------
+
+\subsection{PostgreSQL (Baseline Reference)}
+\label{sec:postgresql}
+
+Although PostgreSQL is not an embedded database, it serves as a baseline
+reference for traditional relational DBMS performance. This allows us to
+contrast embedded engines with a mature, feature-rich server-based system.
+
+\subsubsection{Architecture Overview}
+\label{sec:postgresql-architecture}
+
+PostgreSQL follows a \textbf{client--server architecture}. The server manages
+processes, concurrency control, storage, and query execution. Clients connect
+through a network protocol, even when running on the same machine.
+
+PostgreSQL stores data in row-oriented format and employs a cost-based
+optimizer to generate execution plans.
+
+\subsubsection{Execution Model and Storage Engine}
+\label{sec:postgresql-execution}
+
+Key architectural components include:
+\begin{itemize}
+    \item multiversion concurrency control (MVCC),
+    \item write-ahead logging (WAL),
+    \item B-tree indexing,
+    \item parallel query execution,
+    \item extensive SQL support.
+\end{itemize}
+
+\subsubsection{Strengths and Weaknesses}
+\label{sec:postgresql-strengths}
+
+\paragraph{Strengths.}
+\begin{itemize}
+    \item Robust ACID transactions.
+    \item Rich indexing options.
+    \item Strong support for SQL standards.
+    \item Good performance for mixed workloads.
+\end{itemize}
+
+\paragraph{Weaknesses.}
+\begin{itemize}
+    \item Higher overhead due to server architecture.
+    \item Slower analytical scans compared to columnar engines.
+    \item Less suitable for in-process embedded use.
+\end{itemize}
+
+\subsubsection{Role as Baseline}
+\label{sec:postgresql-baseline}
+
+PostgreSQL provides a reference point to assess:
+\begin{itemize}
+    \item where embedded DBMS outperform server-based architectures,
+    \item where embedded engines fall short,
+    \item how architectural choices influence performance on sensor workloads.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+
+\section{Benchmark Design and Experimental Setup}
+\label{sec:assessment}
+
+In this section, we describe the dataset, the workload scenario, and the
+benchmark methodology used to evaluate BerkeleyDB, DuckDB, and PostgreSQL.
+The focus is exclusively on the benchmark; no full end-user application is
+implemented. Instead, the benchmark scripts execute a family of queries and
+updates derived from a realistic IoT monitoring scenario.
+
+\subsection{Dataset Description}
+\label{sec:dataset}
+
+We use the publicly available Intel Berkeley Research Lab dataset, a widely
+studied real-world IoT dataset. It contains:
+\begin{itemize}
+    \item over 2.3 million timestamped readings,
+    \item collected from 54 sensors deployed indoors,
+    \item covering temperature, humidity, light intensity, and voltage,
+    \item timestamped both as \texttt{epoch} and as human-readable date/time.
+\end{itemize}
+
+Each row corresponds to the measurement of a single sensor at a specific time.
+This dataset is particularly suited to evaluating embedded databases because:
+\begin{itemize}
+    \item it resembles typical IoT monitoring workloads,
+    \item it is large enough to stress test analytical engines,
+    \item it requires both fast point lookups and global computations.
+\end{itemize}
+
+For the benchmark, the raw \texttt{data.txt} file is converted to CSV and
+loaded into the different database engines. To simulate deployments of various
+scales, subsamples of size $1\,000$, $10\,000$, and $100\,000$ rows are created
+using a stratified sampling procedure that preserves the chronological order
+within each sensor.
+
+\subsection{Workload Scenario and Requirements}
+\label{sec:application-requirements}
+
+The benchmark workload is inspired by IoT monitoring use cases in which a
+sensor platform must:
+\begin{itemize}
+    \item ingest new measurements,
+    \item retrieve recent values for specific sensors,
+    \item update or delete measurements,
+    \item compute statistics per sensor and per day,
+    \item detect anomalous measurements,
+    \item detect outages (periods with missing data),
+    \item compare the behaviour of different sensors.
+\end{itemize}
+
+These requirements lead to a set of benchmark phases that jointly cover both
+OLTP-like and OLAP-like operations on the same dataset.
+
+\subsection{Benchmark Methodology}
+\label{sec:methodology}
+
+To evaluate the performance of the three systems, we designed a benchmark whose
+phases are directly derived from the workload scenario above. Our objective is
+to study:
+\begin{itemize}
+    \item how each system scales with increasing dataset size,
+    \item whether the behaviour is linear or exponential,
+    \item how embedded systems compare to a traditional RDBMS.
+\end{itemize}
+
+\subsubsection{Workload Definition}
+\label{sec:workload}
+
+Each benchmark phase corresponds to a well-defined operation on the sensor
+dataset. Below we describe in detail what each phase does:
+
+\begin{itemize}
+    \item \textbf{LOAD}: bulk insertion of $N$ rows from the CSV file into the
+          database. For BerkeleyDB, each row is stored as a value keyed by a
+          composite key (sensor identifier and timestamp). For DuckDB and
+          PostgreSQL, the rows are inserted into a relational table with
+          columns for timestamp, sensor id, temperature, humidity, light and
+          voltage. This phase models initial ingestion or batch loading.
+    \item \textbf{READ}: a series of point lookups of individual rows. The
+          benchmark repeatedly selects specific sensor/timestamp keys and
+          retrieves the corresponding measurement. This models access to
+          individual measurements, as might occur for debugging or detailed
+          inspection of specific events.
+    \item \textbf{LAST\_READINGS}: for a set of sensor identifiers, retrieve
+          the most recent reading of each sensor. In SQL systems, this is
+          implemented as a grouped query using \texttt{MAX(timestamp)} or
+          window functions; with BerkeleyDB, it corresponds to accessing the
+          last key for each sensor. This models dashboards or monitoring tools
+          that show the latest state of each sensor.
+    \item \textbf{UPDATE}: modify specific fields (e.g.\ temperature or
+          humidity) of existing rows selected by sensor id and time range. In
+          SQL systems, this is performed with \texttt{UPDATE} statements; in
+          BerkeleyDB, the corresponding values are overwritten. This phase
+          simulates corrections to recorded measurements.
+    \item \textbf{DELETE}: remove rows corresponding to a subset of sensors or
+          a given time window. In SQL systems, this uses \texttt{DELETE} with
+          predicates; in BerkeleyDB, it deletes keys. This models the purging
+          of obsolete or corrupted data.
+    \item \textbf{AVG\_SENSOR}: compute the average temperature per sensor over
+          all measurements in the dataset. In SQL, this is a \texttt{GROUP BY}
+          query: for each sensor id, compute \texttt{AVG(temperature)}. This
+          phase quantifies how fast each system can perform basic aggregation
+          over the full dataset.
+    \item \textbf{HOT\_SENSORS}: identify sensors whose average temperature is
+          above a threshold and that have at least a minimum number of
+          readings. This combines aggregation (\texttt{AVG}) with a
+          \texttt{HAVING} filter and optionally a \texttt{LIMIT k} to obtain a
+          top-k list of the hottest sensors. It models alerting scenarios such
+          as ``which sensors are overheating''.
+    \item \textbf{ANOMALIES}: detect potentially anomalous measurements for each
+          sensor. Concretely, for each sensor the benchmark computes its mean
+          temperature and either standard deviation or interquartile range, and
+          then selects measurements whose temperature deviates from the mean by
+          more than a fixed threshold (e.g.\ more than two standard deviations).
+          This is implemented as a combination of aggregations and joins or
+          window functions in SQL systems. It models anomaly detection on
+          individual time-series.
+    \item \textbf{DAILY\_SUMMARY}: compute daily statistics per sensor, such as
+          the minimum, maximum, and average temperature per day. In SQL, this
+          corresponds to grouping by sensor id and date (extracted from the
+          timestamp) and applying \texttt{MIN}, \texttt{MAX} and
+          \texttt{AVG} aggregations. This models daily reports or summary
+          dashboards.
+    \item \textbf{OUTAGES}: detect periods where a sensor did not send any data
+          for an unusually long time. In SQL systems, this is implemented using
+          a window function such as \texttt{LAG(timestamp)} partitioned by
+          sensor id and ordered by time; the query computes the difference
+          between consecutive timestamps and filters those where the gap
+          exceeds a given threshold (e.g.\ one hour). This phase models outage
+          detection in monitoring systems.
+    \item \textbf{TOPK\_SENSORS}: compute the $k$ sensors with the highest
+          average temperature or with the largest number of readings. This is a
+          \texttt{GROUP BY} followed by an \texttt{ORDER BY} and \texttt{LIMIT}.
+          It models ranking tasks, such as finding the busiest or hottest
+          sensors.
+    \item \textbf{COMPARE\_TWO}: compare the behaviour of two sensors over time,
+          e.g.\ by computing the correlation between their temperature
+          time-series. In SQL, this is implemented by joining the measurements
+          of two sensors on aligned timestamps (or time buckets) and then
+          computing correlation coefficients or summary statistics. This
+          models cross-sensor analysis.
+    \item \textbf{FULL\_PROFILE}: a combined workload that chains several of the
+          analytical queries above. For DuckDB and PostgreSQL, this phase
+          approximates the cost of computing per-sensor averages, daily
+          summaries, outages and top-k sensors in sequence. For BerkeleyDB,
+          which lacks SQL, the benchmark measures a simple local statistical
+          summary over the most recent cached values. This phase illustrates the
+          cumulative cost of a typical analytic session on the dataset.
+\end{itemize}
+
+Together, these phases cover ingestion, point lookups, transactional updates,
+aggregations, anomaly detection, temporal analysis, and cross-sensor
+comparisons.
+
+\subsubsection{Data Scales}
+\label{sec:data-scales}
+
+To assess scalability, we evaluate the benchmark using three dataset sizes:
+\[
+N \in \{ 1\,000,\; 10\,000,\; 100\,000 \}.
+\]
+
+For each size, a stratified sampling algorithm selects an approximately equal
+number of rows per sensor whenever possible and preserves chronological order.
+This ensures that the benchmark is representative of the full dataset and
+preserves time-series structure.
+
+\subsubsection{Execution Protocol}
+\label{sec:execution-protocol}
+
+Each benchmark phase is executed six times consecutively. The first execution is
+discarded because it typically includes caching, compilation, or buffer pool
+initialisation effects. The average of the remaining five executions is used as
+the reported performance metric.
+
+This procedure follows best practices in benchmarking, including:
+\begin{itemize}
+    \item warming up caches to avoid cold-start bias,
+    \item averaging over multiple runs to reduce variance,
+    \item ensuring reproducibility across systems.
+\end{itemize}
+
+\subsubsection{Hardware and Environment}
+\label{sec:environment}
+
+All experiments were executed on the same machine to guarantee fairness. The
+benchmark environment includes:
+\begin{itemize}
+    \item Python 3.x for orchestrating the benchmark scripts,
+    \item BerkeleyDB with Python bindings,
+    \item DuckDB 1.x,
+    \item a local PostgreSQL server instance,
+    \item identical CSV input files and sampling procedure for all engines.
+\end{itemize}
+
+Details such as CPU model, RAM, operating system, and software versions can be
+reported to further support reproducibility.
+
+% ---------------------------------------------------------------------------
+
+\section{Benchmark Results}
+\label{sec:benchmark-results}
+
+This section presents the performance obtained for the full set of benchmark phases
+executed on the three database engines: \emph{BerkeleyDB}, \emph{DuckDB}, and
+\emph{PostgreSQL}. All experiments were executed for
+$N \in \{10^3, 10^4, 10^5\}$ rows. Each phase was run six times; the first
+execution was discarded to avoid cache warm-up effects, and the execution times
+reported in the figures correspond to the average of the remaining five runs.
+
+We distinguish between (i) OLTP-like operations (LOAD, READ, UPDATE, DELETE,
+LAST\_READINGS) and (ii) analytical SQL operations (AVG\_SENSOR, HOT\_SENSORS,
+ANOMALIES, DAILY\_SUMMARY, OUTAGES, TOPK\_SENSORS, COMPARE\_TWO, FULL\_PROFILE).
+
+\subsection{OLTP-like operations}
+
+\paragraph{LOAD.}
+Figure~\ref{fig:load} shows the time to load $N$ rows into each DBMS.
+DuckDB exhibits very poor scalability, increasing from a few seconds at $10^3$
+rows to more than 330\,s for $10^5$ rows. This linear but steep growth is due
+to its immutable storage model and internal checkpointing during bulk inserts.
+PostgreSQL remains efficient, staying below 1.5\,s even for $10^5$ rows thanks
+to optimized WAL handling and bulk insert mechanisms.
+BerkeleyDB is by far the fastest (below 0.1\,s for all $N$), illustrating the
+efficiency of a key--value style engine for append-heavy workloads.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/load.png}
+  \caption{LOAD --- average duration vs.~number of rows.}
+  \label{fig:load}
+\end{figure}
+
+\paragraph{READ.}
+The READ benchmark retrieves records by key (sensor identifier and, where
+applicable, timestamp). As shown in
+Figure~\ref{fig:read}, BerkeleyDB dominates with sub-millisecond response
+times. DuckDB and PostgreSQL both scale linearly, but DuckDB becomes extremely
+slow at $10^5$ rows (more than 70\,s), confirming that it is not optimized for
+repeated point lookups. PostgreSQL remains significantly faster (below 26\,s),
+relying on index-based lookups.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/read_duration.png}
+  \caption{READ --- average duration vs.~number of rows.}
+  \label{fig:read}
+\end{figure}
+
+\paragraph{UPDATE and DELETE.}
+Figures~\ref{fig:update} and~\ref{fig:delete} show that BerkeleyDB again
+provides the best performance with almost constant-time updates and deletions.
+PostgreSQL is slower but scales predictably, reaching around 17\,s for UPDATE
+and 3\,s for DELETE at $10^5$ rows. DuckDB is by far the slowest (over
+240\,s for UPDATE and 11\,s for DELETE at $10^5$), due to table rewrites
+induced by its append-only columnar storage.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/update_duration.png}
+  \caption{UPDATE --- average duration vs.~number of rows.}
+  \label{fig:update}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/delete_duration.png}
+  \caption{DELETE --- average duration vs.~number of rows.}
+  \label{fig:delete}
+\end{figure}
+
+\paragraph{LAST\_READINGS.}
+This phase retrieves the most recent readings for a set of sensors.
+Figure~\ref{fig:lastreadings} shows that BerkeleyDB is the
+fastest (fractions of milliseconds even at $10^5$ rows). DuckDB performs
+moderately well ($\approx 21$\,ms at $10^5$), while PostgreSQL is the slowest
+($\approx 31$\,ms at $10^5$), though still within acceptable limits.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/last_readings.png}
+  \caption{LAST\_READINGS --- average duration vs.~number of rows.}
+  \label{fig:lastreadings}
+\end{figure}
+
+\subsection{Analytical SQL operations}
+
+\paragraph{ANOMALIES.}
+The ANOMALIES phase computes deviations from the mean temperature for each
+sensor using SQL aggregations and window or join logic. As shown in
+Figure~\ref{fig:anomalies}, DuckDB is consistently faster (from 0.006\,s to
+0.022\,s) than PostgreSQL (from 0.002\,s to 0.070\,s), thanks to vectorised
+columnar execution. BerkeleyDB cannot execute this query directly.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/anomalies.png}
+  \caption{ANOMALIES --- performance comparison between DuckDB and PostgreSQL.}
+  \label{fig:anomalies}
+\end{figure}
+
+\paragraph{AVG\_SENSOR.}
+Figure~\ref{fig:avgsensor} presents the average execution time to compute the
+average temperature per sensor via a \texttt{GROUP BY} query.
+DuckDB clearly outperforms PostgreSQL,
+achieving about 0.01\,s at $10^5$ rows, versus 0.027\,s for PostgreSQL.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/avg_sensor.png}
+  \caption{AVG\_SENSOR --- performance comparison.}
+  \label{fig:avgsensor}
+\end{figure}
+
+\paragraph{HOT\_SENSORS.}
+The HOT\_SENSORS query returns sensors whose average temperature exceeds a
+threshold and have enough readings. As seen in Figure~\ref{fig:hotsensors},
+both systems scale linearly, but DuckDB is systematically faster than
+PostgreSQL.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/hot_sensors.png}
+  \caption{HOT\_SENSORS --- performance comparison.}
+  \label{fig:hotsensors}
+\end{figure}
+
+\paragraph{OUTAGES.}
+The OUTAGES phase detects large gaps in the time series using a LAG window
+function on timestamps. Figure~\ref{fig:outages} shows that DuckDB scales from roughly
+0.003\,s to 0.014\,s, while PostgreSQL increases from 0.001\,s to about
+0.040\,s. Both are linear, but DuckDB has a smaller slope.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/outages.png}
+  \caption{OUTAGES --- performance comparison.}
+  \label{fig:outages}
+\end{figure}
+
+\paragraph{TOPK\_SENSORS.}
+For the TOPK\_SENSORS query (top sensors by average temperature),
+Figure~\ref{fig:topk} confirms DuckDB's advantage: its execution time remains
+around three times lower than PostgreSQL, while both curves grow linearly with
+$N$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/topk_sensors.png}
+  \caption{TOPK\_SENSORS --- performance comparison.}
+  \label{fig:topk}
+\end{figure}
+
+\paragraph{COMPARE\_TWO.}
+The COMPARE\_TWO query computes a correlation-like measure between the temperature
+time-series of two sensors by joining their measurements on aligned timestamps.
+Figure~\ref{fig:comparetwo} shows that DuckDB remains fast
+($\approx 0.005$\,s at $10^5$), whereas PostgreSQL is considerably slower
+($\approx 0.029$\,s).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/compare_two.png}
+  \caption{COMPARE\_TWO --- performance comparison.}
+  \label{fig:comparetwo}
+\end{figure}
+
+\paragraph{DAILY\_SUMMARY.}
+Figure~\ref{fig:dailysummary} shows that PostgreSQL is faster
+than DuckDB for the DAILY\_SUMMARY aggregation. DuckDB reaches about 0.050\,s
+at $10^5$ rows, while PostgreSQL stays near 0.023\,s. This can be explained by
+differences in how both engines materialise intermediate grouped results.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/daily_summary.png}
+  \caption{DAILY\_SUMMARY --- performance comparison.}
+  \label{fig:dailysummary}
+\end{figure}
+
+\paragraph{FULL\_PROFILE.}
+Finally, Figure~\ref{fig:fullprofile} presents the FULL\_PROFILE workload.
+For DuckDB and PostgreSQL, this corresponds to the combined cost of several
+analytical queries (AVG\_SENSOR, DAILY\_SUMMARY, OUTAGES, TOPK\_SENSORS),
+whereas BerkeleyDB executes only a local statistical summary on its cached data.
+DuckDB provides the best analytical performance (0.012\,s to 0.078\,s),
+PostgreSQL is slower (0.018\,s to 0.105\,s), and BerkeleyDB is extremely fast
+for its limited local task (0.004\,s to 0.030\,s).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\linewidth]{fig/full_profile.png}
+  \caption{FULL\_PROFILE --- combined profile workload.}
+  \label{fig:fullprofile}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+
+\section{Discussion}
+\label{sec:discussion}
+
+The experimental results highlight a clear separation of responsibilities
+between the three engines tested. Each system exhibits strengths that are
+consistent with its architectural design.
+
+\subsection{BerkeleyDB}
+
+\paragraph{Strengths.}
+BerkeleyDB offers outstanding performance for key--value access patterns. It
+provides near-constant-time READ, UPDATE, and DELETE operations, and extremely
+fast LOAD times even for $10^5$ rows. Its footprint is small and it can be
+embedded directly in host programs, making it an excellent candidate for
+resource-constrained IoT devices or gateways.
+
+\paragraph{Weaknesses.}
+BerkeleyDB does not support SQL and cannot execute analytical queries such as
+aggregations, joins, or window functions. All higher-level logic must be
+implemented in the client code. As a result, BerkeleyDB is unsuitable as a
+standalone analytical database and must be complemented by another engine for
+global analysis.
+
+\subsection{DuckDB}
+
+\paragraph{Strengths.}
+DuckDB delivers the best performance for all analytical queries in our
+benchmark (ANOMALIES, AVG\_SENSOR, HOT\_SENSORS, OUTAGES, TOPK\_SENSORS,
+COMPARE\_TWO, and the analytical part of FULL\_PROFILE). Its columnar storage
+and vectorised execution make it particularly well adapted to OLAP workloads on
+large sensor datasets, while still running as an embedded library without a
+separate server process.
+
+\paragraph{Weaknesses.}
+On the other hand, DuckDB performs extremely poorly on OLTP-like workloads:
+LOAD, UPDATE, DELETE and repeated point READs are orders of magnitude slower
+than with BerkeleyDB or even PostgreSQL. This is a direct consequence of its
+append-only storage and optimisation for scans rather than random writes. It is
+therefore not suitable for write-heavy or latency-sensitive transactional
+workloads.
+
+\subsection{PostgreSQL}
+
+\paragraph{Strengths.}
+PostgreSQL provides balanced behaviour across workloads. It is much faster than
+DuckDB for UPDATE and DELETE operations, and its index-based execution plans
+offer reasonable performance for READ and LAST\_READINGS. For analytics, it is
+systematically slower than DuckDB, but still scales linearly and remains within
+low tens of milliseconds for $10^5$ rows. As a mature relational system, it
+also offers full transactional guarantees, rich indexing options and a robust
+client--server architecture.
+
+\paragraph{Weaknesses.}
+PostgreSQL is not optimised for columnar scans and cannot match DuckDB on pure
+analytical workloads. It also has a higher operational overhead (separate
+server process, configuration, memory usage) than embedded engines such as
+DuckDB or BerkeleyDB.
+
+\subsection{Overall assessment}
+
+Taken together, the results show that no single engine dominates all workloads.
+Instead, each engine is optimal for a different role in sensor data processing:
+
+\begin{itemize}
+  \item \textbf{Device / edge role:} BerkeleyDB is ideal as a local cache of
+    recent readings, thanks to its extremely fast key--value access and tiny
+    footprint.
+  \item \textbf{Embedded analytics role:} DuckDB is the best choice for complex
+    analytical queries and batch processing over large sensor datasets.
+  \item \textbf{Server / baseline role:} PostgreSQL provides a robust,
+    general-purpose relational backend and serves as a solid reference for
+    comparison.
+\end{itemize}
+
+The benchmark confirms that embedded key--value technology is extremely well
+suited for local, latency-critical access, but must be complemented by an
+analytical engine to support the full range of sensor analytics workloads.
+
+\end{document}
+
