@@ -1,126 +1,84 @@
 #!/usr/bin/env python3
 """
-Script de visualisation des résultats du benchmark kv_iot_results.csv.
+Plotting tool for the  benchmark results.
 
-Pour chaque phase (LOAD, READ, UPDATE, DELETE), on génère :
-  - un graphique Throughput (ops/s) vs N (n_objects)
-  - un graphique Average Duration (s) vs N (n_objects)
+Reads: benchmark_results.csv
+Outputs: fig/<phase>.png for each benchmarked phase
 
-Les courbes sont séparées par moteur (duckdb, berkeleydb, postgresql).
-Les figures sont enregistrées au format PNG dans le dossier courant.
+Each figure contains the 3 technologies (DuckDB, PostgreSQL, BerkeleyDB)
+plotted on the same chart with log-scale on Y when needed.
 """
 
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-RESULTS_CSV = "kv_iot_results.csv"
-OUTPUT_DIR = "plots"
+CSV_FILE = "benchmark_results.csv"
+OUTPUT_DIR = "fig"
 
+# Create output directory
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def ensure_output_dir(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
+# Load CSV
+df = pd.read_csv(CSV_FILE)
 
+# Clean engine names for nicer plots
 
-def plot_throughput(df, phase):
-    """
-    Graphique : throughput_ops_s en fonction de n_objects
-    pour un phase donnée, avec une courbe par moteur.
-    """
-    phase_df = df[df["phase"] == phase].copy()
-    if phase_df.empty:
-        print(f"[WARN] No data for phase {phase}, skipping throughput plot.")
-        return
+# Force engine column to string
+df["engine"] = df["engine"].astype(str)
 
-    plt.figure()
-    for engine in sorted(phase_df["engine"].unique()):
-        sub = phase_df[phase_df["engine"] == engine].sort_values("n_objects")
+df["engine"] = df["engine"].str.replace("postgresql", "PostgreSQL") \
+                           .str.replace("duckdb", "DuckDB") \
+                           .str.replace("berkeleydb", "BerkeleyDB")
+
+# List of unique phases
+phases = sorted(df["phase"].unique())
+
+# Colors per DB
+COLORS = {
+    "BerkeleyDB": "tab:green",
+    "DuckDB": "tab:blue",
+    "PostgreSQL": "tab:red",
+}
+
+print(f"Found phases: {phases}")
+
+# Generate a figure per phase
+
+for phase in phases:
+    sub = df[df["phase"] == phase].sort_values("n_rows")
+
+    plt.figure(figsize=(8, 5))
+    plt.title(f"{phase} — Average Duration by Engine", fontsize=14)
+    plt.xlabel("Number of Rows (N)", fontsize=12)
+    plt.ylabel("Average Duration (s)", fontsize=12)
+
+    engines = sub["engine"].unique()
+
+    for eng in engines:
+        part = sub[sub["engine"] == eng]
         plt.plot(
-            sub["n_objects"],
-            sub["throughput_ops_s"],
+            part["n_rows"],
+            part["avg_duration_s"],
             marker="o",
-            linestyle="-",
-            label=engine,
+            linewidth=2,
+            markersize=6,
+            color=COLORS.get(eng, None),
+            label=eng
         )
 
-    plt.xlabel("Number of objects (N)")
-    plt.ylabel("Throughput (ops/s)")
-    plt.title(f"{phase} – Throughput vs N")
+    # Use log scale if values vary a lot
+    if sub["avg_duration_s"].max() / max(sub["avg_duration_s"].min(), 1e-6) > 50:
+        plt.yscale("log")
+
+    plt.grid(alpha=0.3)
     plt.legend()
-    plt.grid(True)
-    plt.xscale("log")  # pratique pour 1K / 10K / 100K / 1M
-    out_path = os.path.join(OUTPUT_DIR, f"{phase.lower()}_throughput.png")
-    plt.savefig(out_path, bbox_inches="tight")
+    plt.tight_layout()
+
+    out_path = os.path.join(OUTPUT_DIR, f"{phase}.png")
+    plt.savefig(out_path, dpi=200)
     plt.close()
-    print(f"[OK] Saved {out_path}")
 
+    print(f"Saved: {out_path}")
 
-def plot_duration(df, phase):
-    """
-    Graphique : avg_duration_s en fonction de n_objects
-    pour un phase donnée, avec une courbe par moteur.
-    """
-    phase_df = df[df["phase"] == phase].copy()
-    if phase_df.empty:
-        print(f"[WARN] No data for phase {phase}, skipping duration plot.")
-        return
-
-    plt.figure()
-    for engine in sorted(phase_df["engine"].unique()):
-        sub = phase_df[phase_df["engine"] == engine].sort_values("n_objects")
-        plt.plot(
-            sub["n_objects"],
-            sub["avg_duration_s"],
-            marker="o",
-            linestyle="-",
-            label=engine,
-        )
-
-    plt.xlabel("Number of objects (N)")
-    plt.ylabel("Average duration (s)")
-    plt.title(f"{phase} – Average duration vs N")
-    plt.legend()
-    plt.grid(True)
-    plt.xscale("log")
-    out_path = os.path.join(OUTPUT_DIR, f"{phase.lower()}_duration.png")
-    plt.savefig(out_path, bbox_inches="tight")
-    plt.close()
-    print(f"[OK] Saved {out_path}")
-
-
-def main():
-    if not os.path.exists(RESULTS_CSV):
-        print(f"[ERROR] {RESULTS_CSV} not found in current directory.")
-        return
-
-    ensure_output_dir(OUTPUT_DIR)
-
-    df = pd.read_csv(RESULTS_CSV)
-    # sécurité pour les noms de colonnes
-    expected_cols = {
-        "engine",
-        "n_objects",
-        "phase",
-        "operations",
-        "avg_duration_s",
-        "throughput_ops_s",
-    }
-    if not expected_cols.issubset(df.columns):
-        print("[ERROR] CSV columns do not match expected benchmark schema.")
-        print("Expected at least:", expected_cols)
-        print("Got:", df.columns.tolist())
-        return
-
-    phases = sorted(df["phase"].unique())
-    print(f"Phases detected in CSV: {phases}")
-
-    for phase in phases:
-        plot_throughput(df, phase)
-        plot_duration(df, phase)
-
-    print(f"\nAll plots saved in ./{OUTPUT_DIR}/")
-
-
-if __name__ == "__main__":
-    main()
+print("\nAll plots generated in ./fig/")
