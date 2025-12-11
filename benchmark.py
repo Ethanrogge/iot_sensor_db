@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """
+Realistic benchmark for embedded and relational databases on an IoT sensor dataset.
+
 Engines:
   - DuckDB (embedded analytical SQL)
   - PostgreSQL (server-based relational baseline)
-  - BerkeleyDB (embedded key-value cache)
+  - BerkeleyDB (embedded key-value store)
 
-Common phases (per engine, when applicable):
+Phases (names preserved):
   - LOAD
   - READ
   - UPDATE
   - DELETE
   - LAST_READINGS
-  - AVG_SENSOR          (SQL engines)
-  - HOT_SENSORS         (SQL engines)
-  - ANOMALIES           (SQL engines)
-  - DAILY_SUMMARY       (SQL engines)
-  - TOPK_SENSORS        (SQL engines)
-  - OUTAGES             (SQL engines)
-  - COMPARE_TWO         (DuckDB + PostgreSQL)
-  - FULL_PROFILE        (DuckDB + PostgreSQL: analytical bundle, BDB: local stats)
+  - AVG_SENSOR          (DuckDB, PostgreSQL)
+  - HOT_SENSORS         (DuckDB, PostgreSQL)
+  - ANOMALIES           (DuckDB, PostgreSQL)
+  - DAILY_SUMMARY       (DuckDB, PostgreSQL)
+  - TOPK_SENSORS        (DuckDB, PostgreSQL)
+  - OUTAGES             (DuckDB, PostgreSQL)
+  - COMPARE_TWO         (DuckDB, PostgreSQL)
+  - FULL_PROFILE        (DuckDB, PostgreSQL, BerkeleyDB)
 """
 
 import os
@@ -32,18 +34,24 @@ import psycopg2
 from psycopg2.extras import execute_values
 from bsddb3 import db as bdb
 
-# CONFIG
+#  CONFIG 
 
-DATASET_PATH = "/home/ethan/datasets/intel_sensors.csv"  # adapte si besoin
+DATASET_PATH = "/home/ethan/datasets/intel_sensors.csv"
 
-N_LIST = [1_000, 10_000, 100_000, 1_000_000]   # tailles testées
-RUNS = 6                             # 1 warmup + 5 mesures
+N_LIST = [1_000,10_000,100_000,1_000_000]
+RUNS = 6
 RANDOM_SEED = 42
 
-# facteurs pour READ / UPDATE / DELETE
 READ_FACTOR = 1.0
 UPDATE_FACTOR = 0.5
 DELETE_FACTOR = 0.1
+
+LAST_K = 50
+N_SENSORS_QUERIES = 100
+TEMP_THRESHOLD = 30.0
+MIN_READINGS_HOT = 100
+
+RESULTS_CSV = "benchmark_results.csv"
 
 PG_PARAMS = {
     "host": "localhost",
@@ -53,15 +61,8 @@ PG_PARAMS = {
     "password": "password",
 }
 
-RESULTS_CSV = "benchmark_results.csv"
 
-LAST_K = 50               # nb de relevés retournés par "last readings"
-N_SENSORS_QUERIES = 100   # nb de capteurs pour lesquels on fait des queries (AVG, anomalies, etc.)
-TEMP_THRESHOLD = 30.0
-MIN_READINGS_HOT = 100
-
-
-# HELPERS
+#  UTILS 
 
 def now():
     return time.time()
@@ -90,12 +91,12 @@ def record(results, engine, n, phase, avg_time, note=""):
     })
 
 
-# LOAD DATASET
+#  DATASET 
 
 def load_raw_rows(max_n):
     """
-    Charge jusqu'à max_n lignes du CSV réel, triées par (moteid, epoch).
-    Retourne une liste de tuples:
+    Load up to max_n rows from the real CSV, sorted by (moteid, epoch).
+    Returns a list of tuples:
       (epoch, moteid, temperature, humidity, light, voltage)
     """
     print(f"Loading dataset from {DATASET_PATH} ...")
@@ -111,8 +112,7 @@ def load_raw_rows(max_n):
                 float(row["light"]),
                 float(row["voltage"]),
             ))
-    # trier par moteid puis epoch
-    rows.sort(key=lambda x: (x[1], x[0]))
+    rows.sort(key=lambda x: (x[1], x[0]))  # (moteid, epoch)
     if max_n is not None and len(rows) > max_n:
         rows = rows[:max_n]
     print(f"Loaded {len(rows):,} rows from real dataset.")
@@ -122,37 +122,20 @@ def load_raw_rows(max_n):
 FULL_DATA = load_raw_rows(max_n=max(N_LIST))
 
 
-# DUCKDB BENCH
+#  DUCKDB 
 
 def bench_duckdb(n, data, results):
-    """
-    DuckDB benchmark with both KV-style phases and application-level queries.
-
-    Phases:
-      - LOAD: insert N rows into a fresh DuckDB file (with id key)
-      - READ: point lookups by id
-      - UPDATE: update temperature for random ids
-      - DELETE: delete random ids
-      - LAST_READINGS: get last K readings for random sensors
-      - AVG_SENSOR: average temperature per random sensor
-      - HOT_SENSORS: sensors with high average temperature
-      - ANOMALIES: z-score based anomaly scan on recent readings
-      - DAILY_SUMMARY: per-day aggregates over all readings
-      - TOPK_SENSORS: sensors with highest average temperature
-      - OUTAGES: detect gaps in time series
-      - COMPARE_TWO: correlation of temperatures between two sensors
-    """
     engine = "duckdb"
-    dbfile = f"duck_merged_{n}.db"
+    dbfile = f"duck_real_{n}.db"
     if os.path.exists(dbfile):
         os.remove(dbfile)
 
     con = duckdb.connect(dbfile)
     con.execute("""
         CREATE TABLE readings (
-            id        INTEGER,
-            epoch     BIGINT,
-            moteid    INTEGER,
+            id          INTEGER,
+            epoch       BIGINT,
+            moteid      INTEGER,
             temperature DOUBLE,
             humidity    DOUBLE,
             light       DOUBLE,
@@ -161,7 +144,6 @@ def bench_duckdb(n, data, results):
     """)
 
     subset = data[:n]
-    # on ajoute un id séquentiel pour simuler la clé
     subset_with_id = [(i,) + row for i, row in enumerate(subset)]
     con.executemany(
         "INSERT INTO readings VALUES (?, ?, ?, ?, ?, ?, ?);",
@@ -170,6 +152,7 @@ def bench_duckdb(n, data, results):
 
     sensor_ids = sorted({m for _, m, *_ in subset})
     random_sensors = random.sample(sensor_ids, min(N_SENSORS_QUERIES, len(sensor_ids)))
+
     ids = list(range(n))
     n_read = int(READ_FACTOR * n)
     n_upd = int(UPDATE_FACTOR * n)
@@ -201,7 +184,7 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(read_phase)
     record(results, engine, n, "READ", avg, f"(ops={n_read})")
 
-    # UPDATE 
+    # UPDATE
     def update_phase():
         for k in ids_upd:
             con.execute(
@@ -235,7 +218,7 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(last_readings_phase)
     record(results, engine, n, "LAST_READINGS", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  AVG_SENSOR 
+    # AVG_SENSOR
     def avg_sensor_phase():
         for mote in random_sensors:
             con.execute(
@@ -246,7 +229,7 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(avg_sensor_phase)
     record(results, engine, n, "AVG_SENSOR", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  HOT_SENSORS 
+    # HOT_SENSORS
     def hot_sensors_phase():
         con.execute(
             """
@@ -263,7 +246,7 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(hot_sensors_phase)
     record(results, engine, n, "HOT_SENSORS", avg)
 
-    #  ANOMALIES 
+    # ANOMALIES
     def anomalies_phase():
         for mote in random_sensors:
             mean, std = con.execute(
@@ -288,12 +271,12 @@ def bench_duckdb(n, data, results):
             for epoch, temp in recent:
                 z = abs(temp - mean) / std
                 if z > 2.5:
-                    pass  # simulate some work
+                    pass
 
     avg, _ = run_phase(anomalies_phase)
     record(results, engine, n, "ANOMALIES", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  DAILY_SUMMARY 
+    # DAILY_SUMMARY
     def daily_summary_phase():
         con.execute(
             """
@@ -311,7 +294,7 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(daily_summary_phase)
     record(results, engine, n, "DAILY_SUMMARY", avg)
 
-    #  TOPK_SENSORS 
+    # TOPK_SENSORS
     def topk_phase():
         con.execute(
             """
@@ -328,16 +311,16 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(topk_phase)
     record(results, engine, n, "TOPK_SENSORS", avg)
 
-    #  OUTAGES 
+    # OUTAGES
     def outages_phase():
         con.execute(
             """
             WITH ordered AS (
-              SELECT epoch,
-                     LAG(epoch) OVER (ORDER BY epoch) AS prev_epoch
+              SELECT moteid, epoch,
+                     LAG(epoch) OVER (PARTITION BY moteid ORDER BY epoch) AS prev_epoch
               FROM readings
             )
-            SELECT epoch, prev_epoch, (epoch - prev_epoch) AS gap_sec
+            SELECT moteid, epoch, prev_epoch, (epoch - prev_epoch) AS gap_sec
             FROM ordered
             WHERE prev_epoch IS NOT NULL
               AND (epoch - prev_epoch) > 600;
@@ -347,7 +330,7 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(outages_phase)
     record(results, engine, n, "OUTAGES", avg)
 
-    #  COMPARE_TWO 
+    # COMPARE_TWO
     def compare_two_phase():
         if len(random_sensors) < 2:
             return
@@ -372,29 +355,22 @@ def bench_duckdb(n, data, results):
     avg, _ = run_phase(compare_two_phase)
     record(results, engine, n, "COMPARE_TWO", avg)
 
+    # FULL_PROFILE = bundle of several analytical queries
+    def full_profile_phase():
+        avg_sensor_phase()
+        daily_summary_phase()
+        outages_phase()
+        topk_phase()
+
+    avg, _ = run_phase(full_profile_phase)
+    record(results, engine, n, "FULL_PROFILE", avg, "(analytical bundle)")
+
     con.close()
 
 
-#  POSTGRES BENCH 
+#  POSTGRES 
 
 def bench_postgres(n, data, results):
-    """
-    PostgreSQL benchmark with KV-style phases and application-level queries.
-
-    Phases:
-      - LOAD
-      - READ
-      - UPDATE
-      - DELETE
-      - LAST_READINGS
-      - AVG_SENSOR
-      - HOT_SENSORS
-      - ANOMALIES
-      - DAILY_SUMMARY
-      - TOPK_SENSORS
-      - OUTAGES
-      - COMPARE_TWO
-    """
     engine = "postgresql"
     conn = psycopg2.connect(**PG_PARAMS)
     cur = conn.cursor()
@@ -402,7 +378,7 @@ def bench_postgres(n, data, results):
     cur.execute("DROP TABLE IF EXISTS readings;")
     cur.execute("""
         CREATE TABLE readings (
-            id          INTEGER,
+            id          INTEGER PRIMARY KEY,
             epoch       BIGINT,
             moteid      INTEGER,
             temperature DOUBLE PRECISION,
@@ -434,7 +410,7 @@ def bench_postgres(n, data, results):
     ids_upd = random.choices(ids, k=n_upd)
     ids_del = random.sample(ids, min(n_del, len(ids)))
 
-    #  LOAD 
+    # LOAD
     def load_phase():
         cur.execute("DELETE FROM readings;")
         execute_values(
@@ -448,7 +424,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(load_phase)
     record(results, engine, n, "LOAD", avg)
 
-    #  READ 
+    # READ
     def read_phase():
         for k in ids_read:
             cur.execute(
@@ -460,7 +436,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(read_phase)
     record(results, engine, n, "READ", avg, f"(ops={n_read})")
 
-    #  UPDATE 
+    # UPDATE
     def update_phase():
         for k in ids_upd:
             cur.execute(
@@ -472,7 +448,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(update_phase)
     record(results, engine, n, "UPDATE", avg, f"(ops={n_upd})")
 
-    #  DELETE 
+    # DELETE
     def delete_phase():
         for k in ids_del:
             cur.execute(
@@ -484,7 +460,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(delete_phase)
     record(results, engine, n, "DELETE", avg, f"(ops={n_del})")
 
-    #  LAST_READINGS 
+    # LAST_READINGS
     def last_readings_phase():
         for mote in random_sensors:
             cur.execute(
@@ -501,7 +477,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(last_readings_phase)
     record(results, engine, n, "LAST_READINGS", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  AVG_SENSOR 
+    # AVG_SENSOR
     def avg_sensor_phase():
         for mote in random_sensors:
             cur.execute(
@@ -513,7 +489,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(avg_sensor_phase)
     record(results, engine, n, "AVG_SENSOR", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  HOT_SENSORS 
+    # HOT_SENSORS
     def hot_sensors_phase():
         cur.execute(
             """
@@ -531,7 +507,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(hot_sensors_phase)
     record(results, engine, n, "HOT_SENSORS", avg)
 
-    #  ANOMALIES 
+    # ANOMALIES
     def anomalies_phase():
         for mote in random_sensors:
             cur.execute(
@@ -563,7 +539,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(anomalies_phase)
     record(results, engine, n, "ANOMALIES", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  DAILY_SUMMARY 
+    # DAILY_SUMMARY
     def daily_summary_phase():
         cur.execute(
             """
@@ -582,7 +558,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(daily_summary_phase)
     record(results, engine, n, "DAILY_SUMMARY", avg)
 
-    #  TOPK_SENSORS 
+    # TOPK_SENSORS
     def topk_phase():
         cur.execute(
             """
@@ -600,16 +576,16 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(topk_phase)
     record(results, engine, n, "TOPK_SENSORS", avg)
 
-    #  OUTAGES 
+    # OUTAGES
     def outages_phase():
         cur.execute(
             """
             WITH ordered AS (
-              SELECT epoch,
-                     LAG(epoch) OVER (ORDER BY epoch) AS prev_epoch
+              SELECT moteid, epoch,
+                     LAG(epoch) OVER (PARTITION BY moteid ORDER BY epoch) AS prev_epoch
               FROM readings
             )
-            SELECT epoch, prev_epoch, (epoch - prev_epoch) AS gap_sec
+            SELECT moteid, epoch, prev_epoch, (epoch - prev_epoch) AS gap_sec
             FROM ordered
             WHERE prev_epoch IS NOT NULL
               AND (epoch - prev_epoch) > 600;
@@ -620,7 +596,7 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(outages_phase)
     record(results, engine, n, "OUTAGES", avg)
 
-    #  COMPARE_TWO 
+    # COMPARE_TWO
     def compare_two_phase():
         if len(random_sensors) < 2:
             return
@@ -646,95 +622,113 @@ def bench_postgres(n, data, results):
     avg, _ = run_phase(compare_two_phase)
     record(results, engine, n, "COMPARE_TWO", avg)
 
+    # FULL_PROFILE
+    def full_profile_phase():
+        avg_sensor_phase()
+        daily_summary_phase()
+        outages_phase()
+        topk_phase()
+
+    avg, _ = run_phase(full_profile_phase)
+    record(results, engine, n, "FULL_PROFILE", avg, "(analytical bundle)")
+
     cur.close()
     conn.close()
 
 
-#  BERKELEYDB BENCH 
+#  BERKELEYDB (REALISTIC) 
 
 def bench_berkeley(n, data, results):
     """
-    BerkeleyDB benchmark: embedded key-value cache on sensor data.
+    BerkeleyDB benchmark (realistic design):
 
-    Phases:
-      - LOAD: store per-sensor readings as one value per sensor
-      - READ: random get() on sensor keys
-      - UPDATE: modify stored blob for random sensor keys
-      - DELETE: delete random sensor keys
-      - LAST_READINGS: parse last K readings for random sensors
-      - FULL_PROFILE: local min/max/avg on cached readings
+    - One entry per reading:
+      key = "moteid:epoch" (zero-padded so BTREE order == (moteid, epoch))
+      value = "epoch|temp|hum|light|volt"
+
+    - READ / UPDATE / DELETE:
+      operate on individual keys (random subset).
+
+    - LAST_READINGS:
+      uses an in-memory index: per_sensor_keys[moteid] = [key1, key2, ...]
+      and get() only the LAST_K keys for each sensor.
+
+    - FULL_PROFILE:
+      for a few sensors, read all their values from DB and compute
+      min/max/avg temperature (local stats).
     """
     engine = "berkeleydb"
-    dbfile = f"bdb_merged_{n}.db"
+    dbfile = f"bdb_real_{n}.db"
     if os.path.exists(dbfile):
         os.remove(dbfile)
 
-    # Build an in-memory per-sensor structure first
-    per_sensor = defaultdict(list)
-    for epoch, mote, temp, hum, light, volt in data[:n]:
-        per_sensor[mote].append((epoch, temp, hum, light, volt))
+    subset = data[:n]
 
-    sensor_ids = sorted(per_sensor.keys())
+    # Build record list and in-memory “index” per sensor
+    records = []
+    per_sensor_keys = defaultdict(list)
+    for epoch, moteid, temp, hum, light, volt in subset:
+        key = f"{moteid:03d}:{epoch:010d}".encode("utf-8")
+        val = f"{epoch}|{temp:.2f}|{hum:.2f}|{light:.0f}|{volt:.2f}".encode("utf-8")
+        records.append((key, val, moteid))
+        per_sensor_keys[moteid].append(key)
+
+    sensor_ids = sorted(per_sensor_keys.keys())
     random_sensors = random.sample(sensor_ids, min(N_SENSORS_QUERIES, len(sensor_ids)))
+
     n_read = int(READ_FACTOR * n)
     n_upd = int(UPDATE_FACTOR * n)
     n_del = int(DELETE_FACTOR * n)
 
-    keys_read = random.choices(sensor_ids, k=n_read)
-    keys_upd = random.choices(sensor_ids, k=n_upd)
-    keys_del = random.sample(sensor_ids, min(n_del, len(sensor_ids)))
+    all_keys = [kv[0] for kv in records]
+    keys_read = random.choices(all_keys, k=n_read)
+    keys_upd = random.choices(all_keys, k=n_upd)
+    keys_del = random.sample(all_keys, min(n_del, len(all_keys)))
 
     def open_db():
         database = bdb.DB()
         database.open(dbfile, None, bdb.DB_BTREE, bdb.DB_CREATE)
         return database
 
-    #  LOAD 
+    # LOAD
     def load_phase():
         database = open_db()
         database.truncate()
-        for mote, readings in per_sensor.items():
-            # encode all readings into a single value:
-            # "epoch|temp|hum|light|volt;epoch|temp|..."
-            val = ";".join(
-                f"{epoch}|{temp:.2f}|{hum:.2f}|{light:.0f}|{volt:.2f}"
-                for epoch, temp, hum, light, volt in readings
-            )
-            database.put(str(mote).encode("utf-8"), val.encode("utf-8"))
+        for key, val, _moteid in records:
+            database.put(key, val)
         database.close()
 
     avg, _ = run_phase(load_phase)
     record(results, engine, n, "LOAD", avg)
 
-    #  READ 
+    # READ (random keys)
     def read_phase():
         database = open_db()
-        for mote in keys_read:
-            _ = database.get(str(mote).encode("utf-8"))
+        for key in keys_read:
+            _ = database.get(key)
         database.close()
 
     avg, _ = run_phase(read_phase)
     record(results, engine, n, "READ", avg, f"(ops={n_read})")
 
-    #  UPDATE 
+    # UPDATE (append a marker in value)
     def update_phase():
         database = open_db()
-        for mote in keys_upd:
-            key = str(mote).encode("utf-8")
+        for key in keys_upd:
             val = database.get(key)
-            if val:
+            if val is not None:
                 database.put(key, val + b"_u")
         database.close()
 
     avg, _ = run_phase(update_phase)
     record(results, engine, n, "UPDATE", avg, f"(ops={n_upd})")
 
-    #  DELETE 
+    # DELETE
     def delete_phase():
         database = open_db()
-        for mote in keys_del:
+        for key in keys_del:
             try:
-                database.delete(str(mote).encode("utf-8"))
+                database.delete(key)
             except bdb.DBNotFoundError:
                 pass
         database.close()
@@ -742,45 +736,42 @@ def bench_berkeley(n, data, results):
     avg, _ = run_phase(delete_phase)
     record(results, engine, n, "DELETE", avg, f"(ops={n_del})")
 
-    #  LAST_READINGS 
+    # LAST_READINGS: get last K keys per sensor (using in-memory index)
     def last_readings_phase():
         database = open_db()
         for mote in random_sensors:
-            val = database.get(str(mote).encode("utf-8"))
-            if not val:
-                continue
-            parts = val.decode("utf-8").split(";")
-            last = parts[-LAST_K:] if len(parts) > LAST_K else parts
-            # parse to simulate some CPU usage
-            for p in last:
-                _ = p.split("|")  # (epoch, temp, hum, light, volt)
+            keys_for_sensor = per_sensor_keys[mote]
+            last_keys = keys_for_sensor[-LAST_K:] if len(keys_for_sensor) > LAST_K else keys_for_sensor
+            for key in last_keys:
+                _ = database.get(key)
         database.close()
 
     avg, _ = run_phase(last_readings_phase)
     record(results, engine, n, "LAST_READINGS", avg, f"(for {len(random_sensors)} sensors)")
 
-    #  FULL_PROFILE 
+    # FULL_PROFILE: local stats (min/max/avg temp) for a few sensors
     def full_profile_phase():
         database = open_db()
         for mote in random_sensors[:5]:
-            val = database.get(str(mote).encode("utf-8"))
-            if not val:
-                continue
-            parts = val.decode("utf-8").split(";")
+            keys_for_sensor = per_sensor_keys[mote]
             temps = []
-            for p in parts:
-                if not p:
+            for key in keys_for_sensor:
+                val = database.get(key)
+                if not val:
                     continue
-                fields = p.split("|")
-                if len(fields) < 2:
+                parts = val.decode("utf-8").split("|")
+                if len(parts) < 2:
                     continue
-                temps.append(float(fields[1]))
+                temps.append(float(parts[1]))
             if temps:
                 _ = (min(temps), max(temps), sum(temps) / len(temps))
         database.close()
 
     avg, _ = run_phase(full_profile_phase)
     record(results, engine, n, "FULL_PROFILE", avg, "(local stats)")
+
+    # Note: BerkeleyDB cannot natively run AVG_SENSOR, HOT_SENSORS, ANOMALIES, etc.
+    # Those are left unimplemented to reflect its non-SQL nature.
 
 
 #  MAIN 
@@ -789,15 +780,15 @@ def main():
     random.seed(RANDOM_SEED)
     results = []
 
-    import csv as _csv
     for n in N_LIST:
-        print(f"\n===== N = {n} rows (merged workload) =====")
+        print(f"\n===== N = {n} rows (realistic benchmark) =====")
         subset = FULL_DATA[:n]
 
-        bench_duckdb(n, subset, results)
+        #bench_duckdb(n, subset, results)
         bench_postgres(n, subset, results)
-        bench_berkeley(n, subset, results)
+        #bench_berkeley(n, subset, results)
 
+    import csv as _csv
     with open(RESULTS_CSV, "w", newline="") as f:
         writer = _csv.DictWriter(
             f,
@@ -811,3 +802,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
