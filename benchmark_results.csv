@@ -1,0 +1,129 @@
+engine,n_rows,phase,avg_duration_s,note
+duckdb,1000,LOAD,2.917693,
+duckdb,1000,READ,0.568398,(ops=1000)
+duckdb,1000,UPDATE,1.525298,(ops=500)
+duckdb,1000,DELETE,0.111498,(ops=100)
+duckdb,1000,LAST_READINGS,0.004961,(for 1 sensors)
+duckdb,1000,AVG_SENSOR,0.000571,(for 1 sensors)
+duckdb,1000,HOT_SENSORS,0.002878,
+duckdb,1000,ANOMALIES,0.006176,(for 1 sensors)
+duckdb,1000,DAILY_SUMMARY,0.004847,
+duckdb,1000,TOPK_SENSORS,0.002373,
+duckdb,1000,OUTAGES,0.003391,
+duckdb,1000,COMPARE_TWO,0.0,
+duckdb,1000,FULL_PROFILE,0.006715,(analytical bundle)
+postgresql,1000,LOAD,0.012547,
+postgresql,1000,READ,0.29355,(ops=1000)
+postgresql,1000,UPDATE,0.038827,(ops=500)
+postgresql,1000,DELETE,0.030756,(ops=100)
+postgresql,1000,LAST_READINGS,0.000547,(for 1 sensors)
+postgresql,1000,AVG_SENSOR,0.000422,(for 1 sensors)
+postgresql,1000,HOT_SENSORS,0.002373,
+postgresql,1000,ANOMALIES,0.001296,(for 1 sensors)
+postgresql,1000,DAILY_SUMMARY,0.000656,
+postgresql,1000,TOPK_SENSORS,0.000535,
+postgresql,1000,OUTAGES,0.000624,
+postgresql,1000,COMPARE_TWO,0.0,
+postgresql,1000,FULL_PROFILE,0.003756,(analytical bundle)
+berkeleydb,1000,LOAD,0.001014,
+berkeleydb,1000,READ,0.000696,(ops=1000)
+berkeleydb,1000,UPDATE,0.000682,(ops=500)
+berkeleydb,1000,DELETE,8.7e-05,(ops=100)
+berkeleydb,1000,LAST_READINGS,9.3e-05,(for 1 sensors)
+berkeleydb,1000,FULL_PROFILE,0.000311,(local stats)
+duckdb,10000,LOAD,36.847772,
+duckdb,10000,READ,5.828812,(ops=10000)
+duckdb,10000,UPDATE,15.377335,(ops=5000)
+duckdb,10000,DELETE,0.633035,(ops=1000)
+duckdb,10000,LAST_READINGS,0.007623,(for 1 sensors)
+duckdb,10000,AVG_SENSOR,0.000703,(for 1 sensors)
+duckdb,10000,HOT_SENSORS,0.00048,
+duckdb,10000,ANOMALIES,0.006102,(for 1 sensors)
+duckdb,10000,DAILY_SUMMARY,0.010297,
+duckdb,10000,TOPK_SENSORS,0.000761,
+duckdb,10000,OUTAGES,0.001462,
+duckdb,10000,COMPARE_TWO,0.0,
+duckdb,10000,FULL_PROFILE,0.013278,(analytical bundle)
+postgresql,10000,LOAD,0.059067,
+postgresql,10000,READ,1.662973,(ops=10000)
+postgresql,10000,UPDATE,1.407299,(ops=5000)
+postgresql,10000,DELETE,0.306472,(ops=1000)
+postgresql,10000,LAST_READINGS,0.004029,(for 1 sensors)
+postgresql,10000,AVG_SENSOR,0.002299,(for 1 sensors)
+postgresql,10000,HOT_SENSORS,0.003454,
+postgresql,10000,ANOMALIES,0.003957,(for 1 sensors)
+postgresql,10000,DAILY_SUMMARY,0.00612,
+postgresql,10000,TOPK_SENSORS,0.0054,
+postgresql,10000,OUTAGES,0.004046,
+postgresql,10000,COMPARE_TWO,0.0,
+postgresql,10000,FULL_PROFILE,0.008924,(analytical bundle)
+berkeleydb,10000,LOAD,0.012626,
+berkeleydb,10000,READ,0.015442,(ops=10000)
+berkeleydb,10000,UPDATE,0.025457,(ops=5000)
+berkeleydb,10000,DELETE,0.001874,(ops=1000)
+berkeleydb,10000,LAST_READINGS,0.001163,(for 1 sensors)
+berkeleydb,10000,FULL_PROFILE,0.003433,(local stats)
+duckdb,100000,LOAD,311.750695,
+duckdb,100000,READ,70.345367,(ops=100000)
+duckdb,100000,UPDATE,243.888185,(ops=50000)
+duckdb,100000,DELETE,11.363855,(ops=10000)
+duckdb,100000,LAST_READINGS,0.020978,(for 3 sensors)
+duckdb,100000,AVG_SENSOR,0.010336,(for 3 sensors)
+duckdb,100000,HOT_SENSORS,0.00168,
+duckdb,100000,ANOMALIES,0.022002,(for 3 sensors)
+duckdb,100000,DAILY_SUMMARY,0.050404,
+duckdb,100000,TOPK_SENSORS,0.004182,
+duckdb,100000,OUTAGES,0.013502,
+duckdb,100000,COMPARE_TWO,0.004852,
+duckdb,100000,FULL_PROFILE,0.055336,(analytical bundle)
+postgresql,100000,LOAD,0.826506,
+postgresql,100000,READ,25.663661,(ops=100000)
+postgresql,100000,UPDATE,16.182558,(ops=50000)
+postgresql,100000,DELETE,3.10872,(ops=10000)
+postgresql,100000,LAST_READINGS,0.030796,(for 3 sensors)
+postgresql,100000,AVG_SENSOR,0.026681,(for 3 sensors)
+postgresql,100000,HOT_SENSORS,0.01335,
+postgresql,100000,ANOMALIES,0.070509,(for 3 sensors)
+postgresql,100000,DAILY_SUMMARY,0.02284,
+postgresql,100000,TOPK_SENSORS,0.014911,
+postgresql,100000,OUTAGES,0.040355,
+postgresql,100000,COMPARE_TWO,0.029127,
+postgresql,100000,FULL_PROFILE,0.019565,(analytical bundle)
+berkeleydb,100000,LOAD,0.214527,
+berkeleydb,100000,READ,0.256594,(ops=100000)
+berkeleydb,100000,UPDATE,0.387215,(ops=50000)
+berkeleydb,100000,DELETE,0.026462,(ops=10000)
+berkeleydb,100000,LAST_READINGS,0.006648,(for 3 sensors)
+berkeleydb,100000,FULL_PROFILE,0.028973,(local stats)
+duckdb,1000000,LOAD,3135.634876,
+duckdb,1000000,READ,729.17815,(ops=1000000)
+duckdb,1000000,UPDATE,1610.980392,(ops=500000)
+duckdb,1000000,DELETE,98.637157,(ops=100000)
+duckdb,1000000,LAST_READINGS,0.157615,(for 25 sensors)
+duckdb,1000000,AVG_SENSOR,0.037595,(for 25 sensors)
+duckdb,1000000,HOT_SENSORS,0.004352,
+duckdb,1000000,ANOMALIES,0.207942,(for 25 sensors)
+duckdb,1000000,DAILY_SUMMARY,0.129354,
+duckdb,1000000,TOPK_SENSORS,0.005954,
+duckdb,1000000,OUTAGES,0.025322,
+duckdb,1000000,COMPARE_TWO,0.006075,
+duckdb,1000000,FULL_PROFILE,0.194521,(analytical bundle)
+postgresql,1000000,LOAD,21.665162,
+postgresql,1000000,READ,213.114598,(ops=1000000)
+postgresql,1000000,UPDATE,113.581946,(ops=500000)
+postgresql,1000000,DELETE,22.430684,(ops=100000)
+postgresql,1000000,LAST_READINGS,1.456066,(for 25 sensors)
+postgresql,1000000,AVG_SENSOR,1.191561,(for 25 sensors)
+postgresql,1000000,HOT_SENSORS,0.076205,
+postgresql,1000000,ANOMALIES,2.43599,(for 25 sensors)
+postgresql,1000000,DAILY_SUMMARY,0.153745,
+postgresql,1000000,TOPK_SENSORS,0.091878,
+postgresql,1000000,OUTAGES,0.523254,
+postgresql,1000000,COMPARE_TWO,0.114103,
+postgresql,1000000,FULL_PROFILE,2.185694,(analytical bundle)
+berkeleydb,1000000,LOAD,0.732666,
+berkeleydb,1000000,READ,2.460739,(ops=1000000)
+berkeleydb,1000000,UPDATE,3.976311,(ops=500000)
+berkeleydb,1000000,DELETE,0.303217,(ops=100000)
+berkeleydb,1000000,LAST_READINGS,0.001137,(for 25 sensors)
+berkeleydb,1000000,FULL_PROFILE,0.280865,(local stats)
