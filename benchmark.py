@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Realistic benchmark for embedded and relational databases on an IoT sensor dataset.
 
@@ -7,7 +6,7 @@ Engines:
   - PostgreSQL (server-based relational baseline)
   - BerkeleyDB (embedded key-value store)
 
-Phases (names preserved):
+Phases :
   - LOAD
   - READ
   - UPDATE
@@ -770,9 +769,6 @@ def bench_berkeley(n, data, results):
     avg, _ = run_phase(full_profile_phase)
     record(results, engine, n, "FULL_PROFILE", avg, "(local stats)")
 
-    # Note: BerkeleyDB cannot natively run AVG_SENSOR, HOT_SENSORS, ANOMALIES, etc.
-    # Those are left unimplemented to reflect its non-SQL nature.
-
 
 #  MAIN 
 
@@ -784,9 +780,9 @@ def main():
         print(f"\n===== N = {n} rows (realistic benchmark) =====")
         subset = FULL_DATA[:n]
 
-        #bench_duckdb(n, subset, results)
+        bench_duckdb(n, subset, results)
         bench_postgres(n, subset, results)
-        #bench_berkeley(n, subset, results)
+        bench_berkeley(n, subset, results)
 
     import csv as _csv
     with open(RESULTS_CSV, "w", newline="") as f:
