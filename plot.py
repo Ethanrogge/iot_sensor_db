@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Plotting tool for the  benchmark results.
 
@@ -6,7 +5,7 @@ Reads: benchmark_results.csv
 Outputs: fig/<phase>.png for each benchmarked phase
 
 Each figure contains the 3 technologies (DuckDB, PostgreSQL, BerkeleyDB)
-plotted on the same chart with log-scale on Y when needed.
+plotted on the same chart with log-scale on Y when.
 """
 
 import os
