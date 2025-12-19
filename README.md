@@ -54,9 +54,9 @@ The full dataset contains more than **2.3 million sensor readings**.
 
 The dataset can be obtained from Kaggle:
 
-1. Go to https://www.kaggle.com
+1. Go to https://www.kaggle.com/datasets/divyansh22/intel-berkeley-research-lab-sensor-data?resource=download
 2. Search for **Intel Berkeley Research Lab Sensor Data**
-3. Download `data.txt.zip`
+3. Download
 
 ---
 
